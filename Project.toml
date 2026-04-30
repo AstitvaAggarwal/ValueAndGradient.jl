@@ -1,4 +1,4 @@
-name = "ADKernel"
+name = "ValueAndGradient"
 uuid = "b2a3a0f1-1884-4814-87af-a8eccdbd6af6"
 version = "0.1.0"
 authors = ["AstitvaAggarwal <astitvaaggarwalimportant@gmail.com>"]
@@ -12,7 +12,7 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
 
 [extensions]
-ADKernelMooncakeExt = "Mooncake"
+ValueAndGradientMooncakeExt = "Mooncake"
 
 [extras]
 Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
@@ -21,7 +21,7 @@ Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
 test = ["Mooncake"]
 
 [compat]
-ADTypes = "1"
+ADTypes = "1.17"
 FiniteDifferences = "0.12.33"
 Mooncake = "0.4, 0.5"
 Test = "1.11.0"

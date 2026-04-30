@@ -1,101 +1,64 @@
 module TestUtils
 
 using Test: @test, @testset
-using FiniteDifferences: central_fdm, grad, jacobian
+using FiniteDifferences: central_fdm, grad, jvp
 using ADTypes: AbstractADType
-using ..ADKernel:
-    value_and_gradient!!,
-    value_and_jacobian!!,
-    prepare_gradient_cache,
-    prepare_jacobian_cache,
-    AbstractGradientCache
-
-# Finite-difference helpers
+using ..ValueAndGradient:
+    value_and_pullback!!,
+    value_and_pushforward!!,
+    prepare_pullback_cache,
+    prepare_pushforward_cache,
+    AbstractADCache
 
 const _fdm = central_fdm(5, 1)
 
-# Single array or scalar arg: wrap in tuple for uniform return shape
-_fd_gradient(f, x::AbstractArray) = (grad(_fdm, f, x)[1],)
-_fd_gradient(f, x::Number) = (grad(_fdm, f, x)[1],)
-
-# Tuple arg: perturb each element independently, return tuple of gradients
-function _fd_gradient(f, x::Tuple)
-    N = length(x)
-    gs = ntuple(Val(N)) do i
-        fi = v -> f(ntuple(j -> j == i ? v : x[j], Val(N)))
-        grad(_fdm, fi, x[i])[1]
-    end
-    return (gs,)  # wrapped in outer tuple: single argument, gradient is a tuple
-end
-
-# Multiple args: grad returns one gradient per argument
-function _fd_gradient(f, xs::Vararg{Any, N}) where {N}
-    return grad(_fdm, (args...) -> f(args...), xs...)
-end
-
-function _fd_jacobian(f, x::AbstractArray)
-    y = f(x)
-    return y isa Number ? grad(_fdm, f, x)[1] : jacobian(_fdm, f, x)[1]
-end
-_fd_jacobian(f, x::Number) = grad(_fdm, f, x)[1]
-
-# Core test functions
+# ȳ · y inner product for VJP finite-difference check
+_vdot(ȳ::Number, y::Number) = ȳ * y
+_vdot(ȳ::AbstractArray, y::AbstractArray) = sum(conj.(ȳ) .* y)
 
 """
-    test_value_and_gradient(f, backend, xs...; rtol=1e-5, atol=1e-5)
+    test_pullback(f, ȳ, backend, xs...; rtol=1e-5, atol=1e-5)
 
-Check that `value_and_gradient!!` gives correct results for `backend` on `xs...`,
-using finite differences as the reference. Tests both the one-shot and cached forms,
-and checks that repeated cached calls are consistent.
+Check `value_and_pullback!!` against finite differences. `ȳ` is the cotangent
+seed — a scalar or array matching the output type of `f`.
 """
-function test_value_and_gradient(f, backend::AbstractADType, xs...; rtol=1e-5, atol=1e-5)
+function test_pullback(f, ȳ, backend::AbstractADType, xs...; rtol=1e-5, atol=1e-5)
     N = length(xs)
-    # For N==1 the backend returns a single gradient (possibly a tuple for tuple inputs);
-    # for N>1 it returns a tuple (g1, g2, ...). Wrap in a tuple so the loop below
-    # works the same way for both cases.
-    _wrap(g) = N == 1 ? (g,) : Tuple(g)
-
-    @testset "value_and_gradient!!: $(typeof(backend)), $(map(typeof, xs))" begin
-
-        # one-shot form
-        y, gs_raw = value_and_gradient!!(f, backend, xs...)
-        gs = _wrap(gs_raw)
+    @testset "value_and_pullback!!: $(typeof(backend)), $(map(typeof, xs))" begin
+        y, x̄s = value_and_pullback!!(f, ȳ, backend, xs...)
 
         @testset "value correct" begin
             @test y ≈ f(xs...)
         end
 
-        @testset "gradients match finite differences" begin
-            fd_gs = _fd_gradient(f, xs...)
-            for i in eachindex(fd_gs)
-                @test isapprox(_collect(gs[i]), _collect(fd_gs[i]); rtol, atol)
+        @testset "pullback matches finite differences" begin
+            if N == 1
+                fd_x̄ = grad(_fdm, t -> _vdot(ȳ, f(t)), only(xs))[1]
+                @test isapprox(_collect(x̄s), _collect(fd_x̄); rtol, atol)
+            else
+                for k in 1:N
+                    fk = xk -> f(ntuple(i -> i == k ? xk : xs[i], Val(N))...)
+                    fd_x̄k = grad(_fdm, t -> _vdot(ȳ, fk(t)), xs[k])[1]
+                    @test isapprox(_collect(x̄s[k]), _collect(fd_x̄k); rtol, atol)
+                end
             end
         end
 
-        # cached form
-        cache = prepare_gradient_cache(f, backend, xs...)
+        cache = prepare_pullback_cache(f, backend, xs...)
 
-        @testset "prepare_gradient_cache returns AbstractGradientCache" begin
-            @test cache isa AbstractGradientCache
+        @testset "cache isa AbstractADCache" begin
+            @test cache isa AbstractADCache
         end
 
         @testset "cached form agrees with one-shot" begin
-            y2, gs2_raw = value_and_gradient!!(cache, f, xs...)
-            gs2 = _wrap(gs2_raw)
+            y2, x̄s2 = value_and_pullback!!(cache, f, ȳ, xs...)
             @test y2 ≈ y
-            for i in eachindex(gs)
-                @test isapprox(_collect(gs2[i]), _collect(gs[i]); rtol, atol)
-            end
-        end
-
-        @testset "repeated cached calls are consistent" begin
-            y3, gs3_raw = value_and_gradient!!(cache, f, xs...)
-            gs3 = _collect.(_wrap(deepcopy(gs3_raw)))
-            y4, gs4_raw = value_and_gradient!!(cache, f, xs...)
-            gs4 = _collect.(_wrap(gs4_raw))
-            @test y3 ≈ y4
-            for i in eachindex(gs3)
-                @test isapprox(gs3[i], gs4[i]; rtol, atol)
+            if N == 1
+                @test isapprox(_collect(x̄s2), _collect(x̄s); rtol, atol)
+            else
+                for k in 1:N
+                    @test isapprox(_collect(x̄s2[k]), _collect(x̄s[k]); rtol, atol)
+                end
             end
         end
     end
@@ -103,46 +66,48 @@ function test_value_and_gradient(f, backend::AbstractADType, xs...; rtol=1e-5, a
 end
 
 """
-    test_value_and_jacobian(f, backend, x; rtol=1e-5, atol=1e-5)
+    test_pushforward(f, ẋ, backend, xs...; rtol=1e-5, atol=1e-5)
 
-Check that `value_and_jacobian!!` gives correct results for `backend` on `x`,
-using finite differences as the reference.
+Check `value_and_pushforward!!` against finite differences. `ẋ` is the tangent
+seed — same structure as `x` for single-arg, or a tuple of tangents for multi-arg.
 """
-function test_value_and_jacobian(f, backend::AbstractADType, x; rtol=1e-5, atol=1e-5)
-    @testset "value_and_jacobian!!: $(typeof(backend)), x::$(typeof(x))" begin
-
-        y, J = value_and_jacobian!!(f, backend, x)
-        fd_J = _fd_jacobian(f, x)
+function test_pushforward(f, ẋ, backend::AbstractADType, xs...; rtol=1e-5, atol=1e-5)
+    N = length(xs)
+    @testset "value_and_pushforward!!: $(typeof(backend)), $(map(typeof, xs))" begin
+        y, ẏ = value_and_pushforward!!(f, ẋ, backend, xs...)
 
         @testset "value correct" begin
-            @test y ≈ f(x)
+            @test y ≈ f(xs...)
         end
 
-        @testset "Jacobian matches finite differences" begin
-            @test isapprox(_collect(J), _collect(fd_J); rtol, atol)
+        @testset "pushforward matches finite differences" begin
+            fd_ẏ = if N == 1
+                jvp(_fdm, f, (only(xs), ẋ))
+            else
+                jvp(_fdm, (args...) -> f(args...), ntuple(k -> (xs[k], ẋ[k]), Val(N))...)
+            end
+            @test isapprox(_collect(ẏ), _collect(fd_ẏ); rtol, atol)
         end
 
-        cache = prepare_jacobian_cache(f, backend, x)
+        cache = prepare_pushforward_cache(f, backend, xs...)
 
-        @testset "prepare_jacobian_cache returns AbstractGradientCache" begin
-            @test cache isa AbstractGradientCache
+        @testset "cache isa AbstractADCache" begin
+            @test cache isa AbstractADCache
         end
 
         @testset "cached form agrees with one-shot" begin
-            y2, J2 = value_and_jacobian!!(cache, f, x)
+            y2, ẏ2 = value_and_pushforward!!(cache, f, ẋ, xs...)
             @test y2 ≈ y
-            @test isapprox(_collect(J2), _collect(fd_J); rtol, atol)
+            @test isapprox(_collect(ẏ2), _collect(ẏ); rtol, atol)
         end
     end
     return nothing
 end
-
-# Internal helpers
 
 _collect(x::AbstractArray) = collect(x)
 _collect(x::Number) = x
 _collect(x::Tuple) = collect(map(_collect, x))
 
-export test_value_and_gradient, test_value_and_jacobian
+export test_pullback, test_pushforward
 
 end

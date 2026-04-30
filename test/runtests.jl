@@ -1,10 +1,11 @@
-using ADKernel
-using ADKernel.TestUtils
-using ADTypes
+using ValueAndGradient
+using ValueAndGradient.TestUtils
+import ADTypes
+using ADTypes: AbstractADType, AutoMooncake, AutoMooncakeForward
 using Mooncake
 using Test
 
-@testset "ADKernel" begin
+@testset "ValueAndGradient" begin
 
     @testset "GradientOrder" begin
         @test GradientOrder{1}() isa GradientOrder
@@ -19,102 +20,81 @@ using Test
         ADTypes.mode(::_FakeBackend) = ADTypes.ForwardMode()
         f = x -> sum(x .^ 2)
         x = [1.0, 2.0]
-        @test_throws ArgumentError ADKernel.prepare_gradient_cache(f, _FakeBackend(), x)
-        @test_throws ArgumentError ADKernel.prepare_jacobian_cache(f, _FakeBackend(), x)
-        @test ADKernel.gradient_order(_FakeBackend()) === nothing
+        @test_throws ArgumentError ValueAndGradient.prepare_pullback_cache(f, _FakeBackend(), x)
+        @test_throws ArgumentError ValueAndGradient.prepare_pushforward_cache(f, _FakeBackend(), x)
+        @test ValueAndGradient.gradient_order(_FakeBackend()) === nothing
     end
 
-    @testset "Mooncake reverse-mode backend" begin
+    @testset "Mooncake reverse-mode (pullback)" begin
         backend = AutoMooncake(config=nothing)
-
         @test gradient_order(backend) == GradientOrder{1}()
 
-        @testset "gradient:scalar input" begin
-            test_value_and_gradient(x -> x^2, backend, 3.0)
-        end
+        # scalar → scalar
+        test_pullback(x -> x^2, 1.0, backend, 3.0)
 
-        @testset "gradient:array input" begin
-            test_value_and_gradient(x -> sum(x .^ 2), backend, [1.0, 2.0, 3.0])
-        end
+        # array → scalar, unit seed
+        test_pullback(x -> sum(x .^ 2), 1.0, backend, [1.0, 2.0, 3.0])
 
-        @testset "gradient:tuple input" begin
-            test_value_and_gradient(x -> x[1]^2 + x[2]^2, backend, (1.0, 2.0))
-        end
+        # array → array, non-trivial seed (verifies ȳ is actually used)
+        test_pullback(x -> x .^ 2, [2.0, -1.0, 3.0], backend, [1.0, 2.0, 3.0])
 
-        @testset "gradient:multiple array args" begin
-            test_value_and_gradient((x, y) -> sum(x .* y), backend, [1.0, 2.0], [3.0, 4.0])
-        end
+        # tuple input
+        test_pullback(x -> x[1]^2 + x[2]^2, 1.0, backend, (1.0, 2.0))
 
-        @testset "jacobian:scalar-valued" begin
-            test_value_and_jacobian(x -> sum(x .^ 2), backend, [1.0, 2.0, 3.0])
-        end
+        # multiple array args
+        test_pullback((x, y) -> sum(x .* y), 1.0, backend, [1.0, 2.0], [3.0, 4.0])
 
-        @testset "jacobian:vector-valued" begin
-            test_value_and_jacobian(x -> x .^ 2, backend, [1.0, 2.0, 3.0])
-        end
+        # multiple args, non-unit seed
+        test_pullback((x, y) -> x .* y, [1.0, -1.0], backend, [1.0, 2.0], [3.0, 4.0])
 
-        @testset "jacobian:multiple args scalar output" begin
-            f = (x, y) -> sum(x .* y)
-            x, y = [1.0, 2.0], [3.0, 4.0]
-            val, (Jx, Jy) = ADKernel.value_and_jacobian!!(f, backend, x, y)
-            @test val ≈ f(x, y)
-            @test Jx ≈ y
-            @test Jy ≈ x
-        end
+        # complex scalar
+        test_pullback(x -> real(x * conj(x)), 1.0, backend, 1.0 + 2.0im)
 
-        @testset "gradient:complex scalar" begin
-            test_value_and_gradient(x -> real(x * conj(x)), backend, 1.0 + 2.0im)
-        end
+        # complex array
+        test_pullback(x -> real(sum(x .* conj.(x))), 1.0, backend, [1.0+2.0im, 3.0+4.0im])
 
-        @testset "gradient:complex array" begin
-            test_value_and_gradient(x -> real(sum(x .* conj.(x))), backend, [1.0+2.0im, 3.0+4.0im])
+        # manually verify non-unit ȳ is used: ȳ=2 should double the gradient
+        @testset "ȳ scaling" begin
+            f = x -> x .^ 2
+            x = [1.0, 2.0, 3.0]
+            _, x̄1 = value_and_pullback!!(f, ones(3), backend, x)
+            _, x̄2 = value_and_pullback!!(f, 2 .* ones(3), backend, x)
+            @test x̄2 ≈ 2 .* x̄1
         end
     end
 
-    @testset "Mooncake forward-mode backend" begin
+    @testset "Mooncake forward-mode (pushforward)" begin
         backend = AutoMooncakeForward(config=nothing)
-
         @test gradient_order(backend) == GradientOrder{1}()
 
-        @testset "gradient:scalar input" begin
-            test_value_and_gradient(x -> x^2, backend, 3.0)
-        end
+        # scalar → scalar
+        test_pushforward(x -> x^2, 1.0, backend, 3.0)
 
-        @testset "gradient:array input" begin
-            test_value_and_gradient(x -> sum(x .^ 2), backend, [1.0, 2.0, 3.0])
-        end
+        # array → scalar
+        test_pushforward(x -> sum(x .^ 2), [1.0, 0.0, 0.0], backend, [1.0, 2.0, 3.0])
 
-        @testset "gradient:tuple input" begin
-            test_value_and_gradient(x -> x[1]^2 + x[2]^2, backend, (1.0, 2.0))
-        end
+        # array → array
+        test_pushforward(x -> x .^ 2, [1.0, 1.0, 1.0], backend, [1.0, 2.0, 3.0])
 
-        @testset "gradient:multiple array args" begin
-            test_value_and_gradient((x, y) -> sum(x .* y), backend, [1.0, 2.0], [3.0, 4.0])
-        end
+        # array → array, non-trivial tangent
+        test_pushforward(x -> x .^ 2, [0.0, 1.0, -1.0], backend, [1.0, 2.0, 3.0])
 
-        @testset "jacobian:scalar-valued" begin
-            test_value_and_jacobian(x -> sum(x .^ 2), backend, [1.0, 2.0, 3.0])
-        end
+        # multiple array args
+        test_pushforward(
+            (x, y) -> sum(x .* y), ([1.0, 0.0], [0.0, 1.0]), backend, [1.0, 2.0], [3.0, 4.0]
+        )
 
-        @testset "jacobian:vector-valued" begin
-            test_value_and_jacobian(x -> x .^ 2, backend, [1.0, 2.0, 3.0])
-        end
+        # complex scalar
+        test_pushforward(x -> real(x * conj(x)), 1.0 + 0.0im, backend, 1.0 + 2.0im)
 
-        @testset "jacobian:multiple args scalar output" begin
-            f = (x, y) -> sum(x .* y)
-            x, y = [1.0, 2.0], [3.0, 4.0]
-            val, (Jx, Jy) = ADKernel.value_and_jacobian!!(f, backend, x, y)
-            @test val ≈ f(x, y)
-            @test Jx ≈ y
-            @test Jy ≈ x
-        end
-
-        @testset "gradient:complex scalar" begin
-            test_value_and_gradient(x -> real(x * conj(x)), backend, 1.0 + 2.0im)
-        end
-
-        @testset "gradient:complex array" begin
-            test_value_and_gradient(x -> real(sum(x .* conj.(x))), backend, [1.0+2.0im, 3.0+4.0im])
+        # manually verify ẋ scaling: doubling tangent should double ẏ
+        @testset "ẋ scaling" begin
+            f = x -> x .^ 2
+            x = [1.0, 2.0, 3.0]
+            ẋ = [1.0, 1.0, 1.0]
+            _, ẏ1 = value_and_pushforward!!(f, ẋ, backend, x)
+            _, ẏ2 = value_and_pushforward!!(f, 2 .* ẋ, backend, x)
+            @test ẏ2 ≈ 2 .* ẏ1
         end
     end
 

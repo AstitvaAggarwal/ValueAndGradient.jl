@@ -1,101 +1,103 @@
-# ADKernel.jl
+# ValueAndGradient.jl
 
-A minimal Julia interface for computing gradients and Jacobians across AD backends.
+A minimal, backend-agnostic Julia interface for VJPs and JVPs.
 
 ## Why this exists
 
-[DifferentiationInterface.jl](https://github.com/gdalle/DifferentiationInterface.jl) is the general solution. ADKernel is narrower: inputs are restricted to scalars, arrays, and tuples of floats, which means behavior can be fully pinned down and correctness verified automatically via FiniteDifferences. The payoff is a bundled `TestUtils` module that backend authors can run to check their implementation, similar to `Mooncake.test_rule`.
+SciML, Turing, and Lux all need to call VJPs and JVPs, and each has historically shipped its own thin wrappers around Mooncake, Enzyme, Zygote, etc. This package defines a single shared interface — `value_and_pullback!!` and `value_and_pushforward!!` — so backends implement it once and callers depend on it instead of on any specific AD package.
+
+The input/output scope is intentionally narrow (scalars, arrays, tuples of floats) so that correctness can be fully verified automatically via FiniteDifferences.
 
 ## Input types
 
-Supported inputs for differentiable arguments:
+Supported differentiable inputs:
 
 - `Float32`, `Float64` (and other `IEEEFloat` types)
 - `Complex{Float32}`, `Complex{Float64}`
-- Arrays of any of the above (e.g. `Vector{Float64}`, `Matrix{ComplexF32}`)
+- Arrays of any of the above
 - Tuples of any of the above
-
-Multiple differentiable arguments are supported (pass them as extra positional args).
-
-```julia
-DiffScalar = Union{IEEEFloat, Complex{<:IEEEFloat}}
-DiffInput  = Union{DiffScalar, AbstractArray{<:DiffScalar}, Tuple{Vararg{DiffLeaf}}}
-```
+- Multiple differentiable arguments (passed as extra positional args)
 
 ## API
 
 ```julia
-# derivative order
-gradient_order(backend)  # returns GradientOrder{0}, GradientOrder{1}, or nothing
+# VJP: returns (y, x̄) where x̄ = (∂f/∂x)ᵀ ȳ
+y, x̄  = value_and_pullback!!(f, ȳ, backend, x)
+y, x̄s = value_and_pullback!!(f, ȳ, backend, x1, x2)  # multiple args: x̄s is a tuple
 
-# One-shot (builds a fresh cache each call)
-y, g  = value_and_gradient!!(f, backend, x)
-y, gs = value_and_gradient!!(f, backend, x, y)   # multiple args: returns tuple of gradients
-y, J  = value_and_jacobian!!(f, backend, x)
+# JVP: returns (y, ẏ) where ẏ = ∂f/∂x * ẋ
+y, ẏ = value_and_pushforward!!(f, ẋ, backend, x)
+y, ẏ = value_and_pushforward!!(f, (ẋ1, ẋ2), backend, x1, x2)
 
-# Cached (amortises compilation cost over repeated calls)
-cache = prepare_gradient_cache(f, backend, x)
-y, g  = value_and_gradient!!(cache, f, x)
+# Cached forms (amortise compilation cost over repeated calls)
+cache = prepare_pullback_cache(f, backend, x)
+y, x̄ = value_and_pullback!!(cache, f, ȳ, x)
 
-cache = prepare_jacobian_cache(f, backend, x)
-y, J  = value_and_jacobian!!(cache, f, x)
+cache = prepare_pushforward_cache(f, backend, x)
+y, ẏ = value_and_pushforward!!(cache, f, ẋ, x)
+
+# Capability query
+gradient_order(backend)  # returns GradientOrder{1} or nothing
 ```
 
-The `!!` means the backend may write into the cache. The caller owns the returned values; copy them if you need to keep them past the next call.
+The `!!` means the backend may write into the cache. Copy returned values if you need them past the next call.
+
+The caller controls the seed `ȳ` in `value_and_pullback!!` — this is the key design choice. SciML passes adjoint state, Turing passes importance weights, Lux passes cotangents from the layer above. `value_and_gradient!!` (seed = 1) and full Jacobians are both derivable from `value_and_pullback!!` by the caller.
 
 ## Backends
 
-| Backend | Type | Order |
-|---------|------|-------|
-| [Mooncake.jl](https://github.com/chalk-lab/Mooncake.jl) | Reverse-mode | `GradientOrder{1}` |
-| [Mooncake.jl](https://github.com/chalk-lab/Mooncake.jl) | Forward-mode | `GradientOrder{1}` |
-
-Load via weak dependency:
+| Backend | Type | ADTypes struct |
+|---------|------|----------------|
+| [Mooncake.jl](https://github.com/chalk-lab/Mooncake.jl) | Reverse-mode (pullback) | `AutoMooncake` |
+| [Mooncake.jl](https://github.com/chalk-lab/Mooncake.jl) | Forward-mode (pushforward) | `AutoMooncakeForward` |
 
 ```julia
-using ADKernel, ADTypes, Mooncake
+using ValueAndGradient, ADTypes, Mooncake
 
+# Reverse-mode VJP
 backend = AutoMooncake(config=nothing)
-y, g = value_and_gradient!!(x -> sum(x .^ 2), backend, [1.0, 2.0, 3.0])
+y, x̄ = value_and_pullback!!(x -> sum(x .^ 2), 1.0, backend, [1.0, 2.0, 3.0])
+
+# Forward-mode JVP
+fwd = AutoMooncakeForward(config=nothing)
+y, ẏ = value_and_pushforward!!(x -> x .^ 2, [1.0, 0.0, 0.0], fwd, [1.0, 2.0, 3.0])
 ```
 
-## Which backend to use
-
-For gradients, always use `AutoMooncake` (one reverse pass regardless of input size).
-
-For Jacobians, it depends on the shape of `f`:
-
-| Case | Best choice | Cost |
-|------|-------------|------|
-| Scalar output | `AutoMooncake` | 1 reverse pass |
-| More inputs than outputs (n > m) | `AutoMooncake` | m reverse passes |
-| More outputs than inputs (m > n) | `AutoMooncakeForward` | n forward passes |
-
-## Implementing a backend
+## Implementing a new backend
 
 ```julia
 # 1. Declare capability
-ADKernel.gradient_order(::MyBackend) = GradientOrder{1}()
+ValueAndGradient.gradient_order(::MyBackend) = GradientOrder{1}()
 
-# 2. Build a cache
-struct MyGradientCache <: ADKernel.AbstractGradientCache ... end
-ADKernel.prepare_gradient_cache(f, ::MyBackend, x::Vararg{Any,N}) where {N} = MyGradientCache(...)
+# 2. Build caches
+struct MyPullbackCache <: ValueAndGradient.AbstractADCache ... end
+ValueAndGradient.prepare_pullback_cache(f, ::MyBackend, x::Vararg{Any,N}) where {N} = MyPullbackCache(...)
 
-# 3. Implement the cached call
-ADKernel.value_and_gradient!!(cache::MyGradientCache, f, x::Vararg{Any,N}) where {N} = ...
+struct MyPushforwardCache <: ValueAndGradient.AbstractADCache ... end
+ValueAndGradient.prepare_pushforward_cache(f, ::MyBackend, x::Vararg{Any,N}) where {N} = MyPushforwardCache(...)
+
+# 3. Implement the cached calls
+ValueAndGradient.value_and_pullback!!(cache::MyPullbackCache, f, ȳ, x::Vararg{Any,N}) where {N} = ...
+ValueAndGradient.value_and_pushforward!!(cache::MyPushforwardCache, f, ẋ, x::Vararg{Any,N}) where {N} = ...
 ```
 
-The non-cached forms call through automatically, so backends only need to implement the cached versions.
+Non-cached forms call through automatically.
 
 ## Testing your backend
 
 ```julia
-using ADKernel.TestUtils, ADTypes
+using ValueAndGradient.TestUtils
 
 backend = MyBackend()
-test_value_and_gradient(x -> sum(x .^ 2), backend, [1.0, 2.0, 3.0])
-test_value_and_gradient((x, y) -> sum(x .* y), backend, [1.0, 2.0], [3.0, 4.0])
-test_value_and_jacobian(x -> x .^ 2, backend, [1.0, 2.0, 3.0])
+
+# Check VJP with seed ȳ=1.0
+test_pullback(x -> sum(x .^ 2), 1.0, backend, [1.0, 2.0, 3.0])
+
+# Check VJP with non-unit seed (verifies ȳ is actually used)
+test_pullback(x -> x .^ 2, [2.0, -1.0, 3.0], backend, [1.0, 2.0, 3.0])
+
+# Check JVP
+test_pushforward(x -> x .^ 2, [1.0, 0.0, 0.0], backend, [1.0, 2.0, 3.0])
 ```
 
-Correctness is checked against finite differences, including the cached form and repeated calls.
+Correctness is checked against finite differences, including the cached form.
