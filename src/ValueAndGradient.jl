@@ -46,8 +46,6 @@ Multiple arguments: `ẋ` is a tuple of per-argument tangents.
 """
 function value_and_pushforward!! end
 
-# non-caching forms build a cache then delegate
-
 function value_and_pullback!!(f::F, ȳ, backend::AbstractADType, x::Vararg{Any, N}) where {F, N}
     cache = prepare_pullback_cache(f, backend, x...)
     return value_and_pullback!!(cache, f, ȳ, x...)
@@ -57,8 +55,6 @@ function value_and_pushforward!!(f::F, ẋ, backend::AbstractADType, x::Vararg{A
     cache = prepare_pushforward_cache(f, backend, x...)
     return value_and_pushforward!!(cache, f, ẋ, x...)
 end
-
-# error fallbacks
 
 function prepare_pullback_cache(::Any, ::T, ::Vararg{Any, N}) where {T <: AbstractADType, N}
     throw(ArgumentError("`ValueAndGradient.prepare_pullback_cache` not implemented for backend `$T`."))

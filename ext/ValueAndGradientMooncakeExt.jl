@@ -4,8 +4,6 @@ using ValueAndGradient: ValueAndGradient, AbstractADCache, GradientOrder
 using ADTypes: AutoMooncake, AutoMooncakeForward
 using Mooncake: Mooncake, Config
 
-# Cache types
-
 struct MooncakePullbackCache{C} <: AbstractADCache
     inner::C
 end
@@ -14,12 +12,8 @@ struct MooncakePushforwardCache{C} <: AbstractADCache
     inner::C
 end
 
-# Capability
-
 ValueAndGradient.gradient_order(::AutoMooncake) = GradientOrder{1}()
 ValueAndGradient.gradient_order(::AutoMooncakeForward) = GradientOrder{1}()
-
-# prepare_pullback_cache (reverse mode)
 
 function ValueAndGradient.prepare_pullback_cache(
         f::F, backend::AutoMooncake, x::Vararg{Any, N},
@@ -28,8 +22,6 @@ function ValueAndGradient.prepare_pullback_cache(
     return MooncakePullbackCache(Mooncake.prepare_pullback_cache(f, x...; config))
 end
 
-# prepare_pushforward_cache (forward mode)
-
 function ValueAndGradient.prepare_pushforward_cache(
         f::F, backend::AutoMooncakeForward, x::Vararg{Any, N},
     ) where {F, N}
@@ -37,9 +29,7 @@ function ValueAndGradient.prepare_pushforward_cache(
     return MooncakePushforwardCache(Mooncake.prepare_derivative_cache(f, x...; config))
 end
 
-# value_and_pullback!! (reverse mode)
-# Mooncake returns (y, (∂f, ∂x1, ..., ∂xN)); we drop ∂f and return ∂x directly for N=1.
-
+# Mooncake returns (y, (∂f, ∂x1, ..., ∂xN)); we drop ∂f.
 function ValueAndGradient.value_and_pullback!!(
         cache::MooncakePullbackCache, f::F, ȳ, x::Vararg{Any, 1},
     ) where {F}
@@ -53,9 +43,6 @@ function ValueAndGradient.value_and_pullback!!(
     y, (_, x̄s...) = Mooncake.value_and_pullback!!(cache.inner, ȳ, f, x...)
     return y, x̄s
 end
-
-# value_and_pushforward!! (forward mode)
-# Mooncake's JVP takes paired (primal, tangent) tuples for each argument.
 
 function ValueAndGradient.value_and_pushforward!!(
         cache::MooncakePushforwardCache, f::F, ẋ, x::Vararg{Any, 1},

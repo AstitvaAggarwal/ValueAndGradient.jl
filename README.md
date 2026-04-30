@@ -4,7 +4,7 @@ A minimal, backend-agnostic Julia interface for VJPs and JVPs.
 
 ## Why this exists
 
-SciML, Turing, and Lux all need to call VJPs and JVPs, and each has historically shipped its own thin wrappers around Mooncake, Enzyme, Zygote, etc. This package defines a single shared interface — `value_and_pullback!!` and `value_and_pushforward!!` — so backends implement it once and callers depend on it instead of on any specific AD package.
+SciML, Turing, and Lux all need to call VJPs and JVPs, and each has historically shipped its own thin wrappers around Mooncake, Enzyme, Zygote, etc. This package defines a single shared interface (`value_and_pullback!!` and `value_and_pushforward!!`) so backends implement it once and callers depend on it instead of on any specific AD package.
 
 The input/output scope is intentionally narrow (scalars, arrays, tuples of floats) so that correctness can be fully verified automatically via FiniteDifferences.
 
@@ -42,7 +42,7 @@ gradient_order(backend)  # returns GradientOrder{1} or nothing
 
 The `!!` means the backend may write into the cache. Copy returned values if you need them past the next call.
 
-The caller controls the seed `ȳ` in `value_and_pullback!!` — this is the key design choice. SciML passes adjoint state, Turing passes importance weights, Lux passes cotangents from the layer above. `value_and_gradient!!` (seed = 1) and full Jacobians are both derivable from `value_and_pullback!!` by the caller.
+The caller controls the seed `ȳ` in `value_and_pullback!!`. SciML passes adjoint state, Turing passes importance weights, Lux passes cotangents from the layer above. `value_and_gradient!!` (seed = 1) and full Jacobians are both derivable from `value_and_pullback!!` by the caller.
 
 ## Backends
 
@@ -100,4 +100,4 @@ test_pullback(x -> x .^ 2, [2.0, -1.0, 3.0], backend, [1.0, 2.0, 3.0])
 test_pushforward(x -> x .^ 2, [1.0, 0.0, 0.0], backend, [1.0, 2.0, 3.0])
 ```
 
-Correctness is checked against finite differences, including the cached form.
+Correctness is checked against finite differences.

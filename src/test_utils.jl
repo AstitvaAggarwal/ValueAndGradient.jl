@@ -20,7 +20,7 @@ _vdot(ȳ::AbstractArray, y::AbstractArray) = sum(conj.(ȳ) .* y)
     test_pullback(f, ȳ, backend, xs...; rtol=1e-5, atol=1e-5)
 
 Check `value_and_pullback!!` against finite differences. `ȳ` is the cotangent
-seed — a scalar or array matching the output type of `f`.
+seed, a scalar or array matching the output type of `f`.
 """
 function test_pullback(f, ȳ, backend::AbstractADType, xs...; rtol=1e-5, atol=1e-5)
     N = length(xs)
@@ -69,7 +69,7 @@ end
     test_pushforward(f, ẋ, backend, xs...; rtol=1e-5, atol=1e-5)
 
 Check `value_and_pushforward!!` against finite differences. `ẋ` is the tangent
-seed — same structure as `x` for single-arg, or a tuple of tangents for multi-arg.
+seed, same structure as `x` for single-arg or a tuple of tangents for multi-arg.
 """
 function test_pushforward(f, ẋ, backend::AbstractADType, xs...; rtol=1e-5, atol=1e-5)
     N = length(xs)
