@@ -34,6 +34,17 @@ y, ẏ = value_and_pushforward!!(f, (ẋ1, ẋ2), backend, x1, x2)
 
 The caller controls the seed `ȳ` in `value_and_pullback!!`. SciML passes adjoint state, Turing passes importance weights, Lux passes cotangents from the layer above. Gradients (seed = 1) and full Jacobians follow from this.
 
+## Caching with FWithCache
+
+For repeated calls, build the backend cache once with `FWithCache` and reuse it:
+
+```julia
+fc = FWithCache(f, backend, x)          # compile/prepare once
+y, x̄ = value_and_pullback!!(fc, ȳ, backend, x)   # cheap from here on
+```
+
+This is especially useful for Mooncake, where `prepare_pullback_cache` compiles the reverse pass.
+
 ## Backends
 
 | Backend | Type | ADTypes struct |
@@ -44,11 +55,12 @@ The caller controls the seed `ȳ` in `value_and_pullback!!`. SciML passes adjoin
 ```julia
 using ValueAndGradient, ADTypes, Mooncake
 
-# Reverse-mode VJP
+# one-shot
 y, x̄ = value_and_pullback!!(x -> sum(x .^ 2), 1.0, AutoMooncake(config=nothing), [1.0, 2.0, 3.0])
 
-# Forward-mode JVP
-y, ẏ = value_and_pushforward!!(x -> x .^ 2, [1.0, 0.0, 0.0], AutoMooncakeForward(config=nothing), [1.0, 2.0, 3.0])
+# cached
+fc = FWithCache(x -> sum(x .^ 2), AutoMooncake(config=nothing), [1.0, 2.0, 3.0])
+y, x̄ = value_and_pullback!!(fc, 1.0, AutoMooncake(config=nothing), [1.0, 2.0, 3.0])
 ```
 
 ## Implementing a new backend
@@ -61,12 +73,19 @@ end
 function ValueAndGradient.value_and_pushforward!!(f, ẋ, ::MyBackend, x::Vararg{Any,N}) where {N}
     # compute and return (f(x...), tangent)
 end
+
+# optionally support FWithCache for performance
+function ValueAndGradient.FWithCache(f, ::MyBackend, x::Vararg{Any,N}) where {N}
+    return FWithCache(f, build_my_cache(f, x...))
+end
 ```
 
 ## Testing your backend
 
+Load `FiniteDifferences` and `Test` to enable the test utilities:
+
 ```julia
-using ValueAndGradient.TestUtils
+using ValueAndGradient, FiniteDifferences, Test
 
 test_pullback(x -> sum(x .^ 2), 1.0, MyBackend(), [1.0, 2.0, 3.0])
 test_pullback(x -> x .^ 2, [2.0, -1.0, 3.0], MyBackend(), [1.0, 2.0, 3.0])

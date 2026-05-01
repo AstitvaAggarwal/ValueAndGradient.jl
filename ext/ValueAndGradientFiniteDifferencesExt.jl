@@ -1,9 +1,9 @@
-module TestUtils
+module ValueAndGradientFiniteDifferencesExt
 
-using Test: @test, @testset
+using ValueAndGradient: ValueAndGradient
 using FiniteDifferences: central_fdm, grad, jvp
+using Test: @test, @testset
 using ADTypes: AbstractADType
-using ..ValueAndGradient: value_and_pullback!!, value_and_pushforward!!
 
 const _fdm = central_fdm(5, 1)
 
@@ -11,16 +11,17 @@ _vdot(ȳ::Number, y::Number) = ȳ * y
 _vdot(ȳ::AbstractArray, y::AbstractArray) = sum(conj.(ȳ) .* y)
 _vdot(ȳ::Tuple, y::Tuple) = sum(_vdot(ȳi, yi) for (ȳi, yi) in zip(ȳ, y))
 
-"""
-    test_pullback(f, ȳ, backend, xs...; rtol=1e-5, atol=1e-5)
+_collect(x::AbstractArray) = collect(x)
+_collect(x::Number) = x
+_collect(x::Tuple) = map(_collect, x)
 
-Check `value_and_pullback!!` against finite differences. `ȳ` is the cotangent
-seed, matching the output type of `f`: a scalar, array, or tuple thereof.
-"""
-function test_pullback(f, ȳ, backend::AbstractADType, xs...; rtol=1e-5, atol=1e-5)
+_isapprox(a, b; kw...) = isapprox(a, b; kw...)
+_isapprox(a::Tuple, b::Tuple; kw...) = all(_isapprox(ai, bi; kw...) for (ai, bi) in zip(a, b))
+
+function ValueAndGradient.test_pullback(f, ȳ, backend::AbstractADType, xs...; rtol=1e-5, atol=1e-5)
     N = length(xs)
     @testset "value_and_pullback!!: $(typeof(backend)), $(map(typeof, xs))" begin
-        y, x̄s = value_and_pullback!!(f, ȳ, backend, xs...)
+        y, x̄s = ValueAndGradient.value_and_pullback!!(f, ȳ, backend, xs...)
 
         @testset "value correct" begin
             @test y == f(xs...)
@@ -42,17 +43,10 @@ function test_pullback(f, ȳ, backend::AbstractADType, xs...; rtol=1e-5, atol=1e
     return nothing
 end
 
-"""
-    test_pushforward(f, ẋ, backend, xs...; rtol=1e-5, atol=1e-5)
-
-Check `value_and_pushforward!!` against finite differences. `ẋ` is the tangent
-seed, same structure as `x` for single-arg or a tuple of tangents for multi-arg.
-Supports scalar, array, and tuple outputs.
-"""
-function test_pushforward(f, ẋ, backend::AbstractADType, xs...; rtol=1e-5, atol=1e-5)
+function ValueAndGradient.test_pushforward(f, ẋ, backend::AbstractADType, xs...; rtol=1e-5, atol=1e-5)
     N = length(xs)
     @testset "value_and_pushforward!!: $(typeof(backend)), $(map(typeof, xs))" begin
-        y, ẏ = value_and_pushforward!!(f, ẋ, backend, xs...)
+        y, ẏ = ValueAndGradient.value_and_pushforward!!(f, ẋ, backend, xs...)
 
         @testset "value correct" begin
             @test y == f(xs...)
@@ -75,14 +69,5 @@ function test_pushforward(f, ẋ, backend::AbstractADType, xs...; rtol=1e-5, ato
     end
     return nothing
 end
-
-_collect(x::AbstractArray) = collect(x)
-_collect(x::Number) = x
-_collect(x::Tuple) = map(_collect, x)
-
-_isapprox(a, b; kw...) = isapprox(a, b; kw...)
-_isapprox(a::Tuple, b::Tuple; kw...) = all(_isapprox(ai, bi; kw...) for (ai, bi) in zip(a, b))
-
-export test_pullback, test_pushforward
 
 end

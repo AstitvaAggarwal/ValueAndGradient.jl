@@ -5,24 +5,26 @@ authors = ["AstitvaAggarwal <astitvaaggarwalimportant@gmail.com>"]
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
-FiniteDifferences = "26cc04aa-876d-5657-8c51-4c34ba976000"
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [weakdeps]
+FiniteDifferences = "26cc04aa-876d-5657-8c51-4c34ba976000"
 Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [extensions]
+ValueAndGradientFiniteDifferencesExt = ["FiniteDifferences", "Test"]
 ValueAndGradientMooncakeExt = "Mooncake"
 
 [extras]
+FiniteDifferences = "26cc04aa-876d-5657-8c51-4c34ba976000"
 Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Mooncake"]
+test = ["FiniteDifferences", "Mooncake", "Test"]
 
 [compat]
 ADTypes = "1.17"
 FiniteDifferences = "0.12.33"
 Mooncake = "0.4, 0.5"
-Test = "1.11.0"
 julia = "1.10"
