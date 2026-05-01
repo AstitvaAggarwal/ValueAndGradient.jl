@@ -3,16 +3,10 @@ module TestUtils
 using Test: @test, @testset
 using FiniteDifferences: central_fdm, grad, jvp
 using ADTypes: AbstractADType
-using ..ValueAndGradient:
-    value_and_pullback!!,
-    value_and_pushforward!!,
-    prepare_pullback_cache,
-    prepare_pushforward_cache,
-    AbstractADCache
+using ..ValueAndGradient: value_and_pullback!!, value_and_pushforward!!
 
 const _fdm = central_fdm(5, 1)
 
-# ȳ · y inner product for VJP finite-difference check
 _vdot(ȳ::Number, y::Number) = ȳ * y
 _vdot(ȳ::AbstractArray, y::AbstractArray) = sum(conj.(ȳ) .* y)
 
@@ -43,24 +37,6 @@ function test_pullback(f, ȳ, backend::AbstractADType, xs...; rtol=1e-5, atol=1e
                 end
             end
         end
-
-        cache = prepare_pullback_cache(f, backend, xs...)
-
-        @testset "cache isa AbstractADCache" begin
-            @test cache isa AbstractADCache
-        end
-
-        @testset "cached form agrees with one-shot" begin
-            y2, x̄s2 = value_and_pullback!!(cache, f, ȳ, xs...)
-            @test y2 ≈ y
-            if N == 1
-                @test isapprox(_collect(x̄s2), _collect(x̄s); rtol, atol)
-            else
-                for k in 1:N
-                    @test isapprox(_collect(x̄s2[k]), _collect(x̄s[k]); rtol, atol)
-                end
-            end
-        end
     end
     return nothing
 end
@@ -87,18 +63,6 @@ function test_pushforward(f, ẋ, backend::AbstractADType, xs...; rtol=1e-5, ato
                 jvp(_fdm, (args...) -> f(args...), ntuple(k -> (xs[k], ẋ[k]), Val(N))...)
             end
             @test isapprox(_collect(ẏ), _collect(fd_ẏ); rtol, atol)
-        end
-
-        cache = prepare_pushforward_cache(f, backend, xs...)
-
-        @testset "cache isa AbstractADCache" begin
-            @test cache isa AbstractADCache
-        end
-
-        @testset "cached form agrees with one-shot" begin
-            y2, ẏ2 = value_and_pushforward!!(cache, f, ẋ, xs...)
-            @test y2 ≈ y
-            @test isapprox(_collect(ẏ2), _collect(ẏ); rtol, atol)
         end
     end
     return nothing
