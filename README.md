@@ -6,17 +6,19 @@ A minimal, backend-agnostic Julia interface for VJPs and JVPs.
 
 SciML, Turing, and Lux all need to call VJPs and JVPs, and each ships its own wrappers around Mooncake, Enzyme, Zygote, etc. This package defines a single shared interface (`value_and_pullback!!` and `value_and_pushforward!!`) so backends implement it once and callers depend on it instead of on any specific AD package.
 
-The input/output scope is intentionally narrow (scalars, arrays, tuples of floats) so correctness can be checked via FiniteDifferences.
+The input/output scope is narrow (scalars, arrays, tuples of floats) so correctness can be checked via FiniteDifferences.
 
-## Input types
+## Input and output types
 
-Supported differentiable inputs:
+Supported differentiable inputs and outputs:
 
 - `Float32`, `Float64` (and other `IEEEFloat` types)
 - `Complex{Float32}`, `Complex{Float64}`
 - Arrays of any of the above
 - Tuples of any of the above
 - Multiple differentiable arguments (passed as extra positional args)
+
+`ȳ` in `value_and_pullback!!` must match the output type of `f`. `ẏ` returned by `value_and_pushforward!!` has the same structure as `f`'s output.
 
 ## API
 
@@ -30,7 +32,7 @@ y, ẏ = value_and_pushforward!!(f, ẋ, backend, x)
 y, ẏ = value_and_pushforward!!(f, (ẋ1, ẋ2), backend, x1, x2)
 ```
 
-The caller controls the seed `ȳ` in `value_and_pullback!!`. SciML passes adjoint state, Turing passes importance weights, Lux passes cotangents from the layer above. Gradients (seed = 1) and full Jacobians are both derivable by the caller.
+The caller controls the seed `ȳ` in `value_and_pullback!!`. SciML passes adjoint state, Turing passes importance weights, Lux passes cotangents from the layer above. Gradients (seed = 1) and full Jacobians follow from this.
 
 ## Backends
 
@@ -68,7 +70,9 @@ using ValueAndGradient.TestUtils
 
 test_pullback(x -> sum(x .^ 2), 1.0, MyBackend(), [1.0, 2.0, 3.0])
 test_pullback(x -> x .^ 2, [2.0, -1.0, 3.0], MyBackend(), [1.0, 2.0, 3.0])
+test_pullback(x -> (x[1]^2, x[2]^2), (1.0, 1.0), MyBackend(), [1.0, 2.0])
 test_pushforward(x -> x .^ 2, [1.0, 0.0, 0.0], MyBackend(), [1.0, 2.0, 3.0])
+test_pushforward(x -> (x[1]^2, x[2]^2), [1.0, 1.0], MyBackend(), [1.0, 2.0])
 ```
 
 Correctness is checked against finite differences.
