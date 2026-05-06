@@ -34,16 +34,16 @@ y, ẏ = value_and_pushforward!!(f, (ẋ1, ẋ2), backend, x1, x2)
 
 The caller controls the seed `ȳ` in `value_and_pullback!!`. SciML passes adjoint state, Turing passes importance weights, Lux passes cotangents from the layer above. Gradients (seed = 1) and full Jacobians follow from this.
 
-## Caching with FWithCache
+## Caching
 
-For repeated calls, build the backend cache once with `FWithCache` and reuse it:
+For repeated calls, build the backend cache once and pass it via the `cache` keyword:
 
 ```julia
-fc = FWithCache(f, backend, x)          # compile/prepare once
-y, x̄ = value_and_pullback!!(fc, ȳ, backend, x)   # cheap from here on
+cache = Mooncake.prepare_pullback_cache(f, x)   # compile/prepare once
+y, x̄ = value_and_pullback!!(f, ȳ, backend, x; cache)   # cheap from here on
 ```
 
-This is especially useful for Mooncake, where `prepare_pullback_cache` compiles the reverse pass.
+Cache preparation is the backend's responsibility — backends use it if provided and fall back to building one internally if not. Stateless backends (e.g. finite differences) ignore the keyword entirely.
 
 ## Backends
 
@@ -56,27 +56,25 @@ This is especially useful for Mooncake, where `prepare_pullback_cache` compiles 
 using ValueAndGradient, ADTypes, Mooncake
 
 # one-shot
-y, x̄ = value_and_pullback!!(x -> sum(x .^ 2), 1.0, AutoMooncake(config=nothing), [1.0, 2.0, 3.0])
+f = x -> sum(x .^ 2)
+y, x̄ = value_and_pullback!!(f, 1.0, AutoMooncake(config=nothing), [1.0, 2.0, 3.0])
 
-# cached
-fc = FWithCache(x -> sum(x .^ 2), AutoMooncake(config=nothing), [1.0, 2.0, 3.0])
-y, x̄ = value_and_pullback!!(fc, 1.0, AutoMooncake(config=nothing), [1.0, 2.0, 3.0])
+# cached (build rule once, reuse across calls)
+cache = Mooncake.prepare_pullback_cache(f, [1.0, 2.0, 3.0])
+y, x̄ = value_and_pullback!!(f, 1.0, AutoMooncake(config=nothing), [1.0, 2.0, 3.0]; cache)
 ```
 
 ## Implementing a new backend
 
 ```julia
-function ValueAndGradient.value_and_pullback!!(f, ȳ, ::MyBackend, x::Vararg{Any,N}) where {N}
-    # compute and return (f(x...), cotangents)
+function ValueAndGradient.value_and_pullback!!(f, ȳ, ::MyBackend, x::Vararg{Any,N}; cache=nothing) where {N}
+    c = cache !== nothing ? cache : build_my_pullback_cache(f, x...)
+    # compute and return (f(x...), cotangents) using c
 end
 
-function ValueAndGradient.value_and_pushforward!!(f, ẋ, ::MyBackend, x::Vararg{Any,N}) where {N}
-    # compute and return (f(x...), tangent)
-end
-
-# optionally support FWithCache for performance
-function ValueAndGradient.FWithCache(f, ::MyBackend, x::Vararg{Any,N}) where {N}
-    return FWithCache(f, build_my_cache(f, x...))
+function ValueAndGradient.value_and_pushforward!!(f, ẋ, ::MyBackend, x::Vararg{Any,N}; cache=nothing) where {N}
+    c = cache !== nothing ? cache : build_my_derivative_cache(f, x...)
+    # compute and return (f(x...), tangent) using c
 end
 ```
 

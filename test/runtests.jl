@@ -2,7 +2,7 @@ using ValueAndGradient
 using FiniteDifferences, Test  # triggers ValueAndGradientFiniteDifferencesExt
 import ADTypes
 using ADTypes: AbstractADType, AutoMooncake, AutoMooncakeForward
-using Mooncake
+using Mooncake: Mooncake
 using Test
 
 @testset "ValueAndGradient" begin
@@ -57,45 +57,45 @@ using Test
             end
         end
 
-        @testset "FWithCache pullback T=$T" begin
+        @testset "cached pullback T=$T" begin
             f = x -> sum(x .^ 2)
             x = T[1, 2, 3]
             backend = AutoMooncake(config=nothing)
-            fc = FWithCache(f, backend, x)
+            cache = Mooncake.prepare_pullback_cache(f, x)
 
-            y, x̄ = value_and_pullback!!(fc, one(T), backend, x)
+            y, x̄ = value_and_pullback!!(f, one(T), backend, x; cache)
             @test y ≈ f(x)
             @test x̄ ≈ 2 .* x
 
-            # same result as plain f
+            # same result as without cache
             y2, x̄2 = value_and_pullback!!(f, one(T), backend, x)
             @test y ≈ y2
             @test x̄ ≈ x̄2
 
             # repeated calls consistent
-            y3, x̄3 = value_and_pullback!!(fc, one(T), backend, x)
+            y3, x̄3 = value_and_pullback!!(f, one(T), backend, x; cache)
             @test y3 ≈ y
             @test x̄3 ≈ x̄
         end
 
-        @testset "FWithCache pushforward T=$T" begin
+        @testset "cached pushforward T=$T" begin
             f = x -> x .^ 2
             x = T[1, 2, 3]
             ẋ = ones(T, 3)
             backend = AutoMooncakeForward(config=nothing)
-            fc = FWithCache(f, backend, x)
+            cache = Mooncake.prepare_derivative_cache(f, x)
 
-            y, ẏ = value_and_pushforward!!(fc, ẋ, backend, x)
+            y, ẏ = value_and_pushforward!!(f, ẋ, backend, x; cache)
             @test y ≈ f(x)
             @test ẏ ≈ 2 .* x
 
-            # same result as plain f
+            # same result as without cache
             y2, ẏ2 = value_and_pushforward!!(f, ẋ, backend, x)
             @test y ≈ y2
             @test ẏ ≈ ẏ2
 
             # repeated calls consistent
-            y3, ẏ3 = value_and_pushforward!!(fc, ẋ, backend, x)
+            y3, ẏ3 = value_and_pushforward!!(f, ẋ, backend, x; cache)
             @test y3 ≈ y
             @test ẏ3 ≈ ẏ
         end
