@@ -7,8 +7,7 @@ using Mooncake: Mooncake, Config
 function ValueAndGradient.value_and_pullback!!(
         f::F, ȳ, backend::AutoMooncake, x::Vararg{Any, 1}; cache=nothing,
     ) where {F}
-    config = something(backend.config, Config())
-    c = cache !== nothing ? cache : Mooncake.prepare_pullback_cache(f, only(x); config)
+    c = cache !== nothing ? cache : Mooncake.prepare_pullback_cache(f, only(x); config=something(backend.config, Config()))
     y, (_, x̄) = Mooncake.value_and_pullback!!(c, ȳ, f, only(x))
     return y, x̄
 end
@@ -16,8 +15,7 @@ end
 function ValueAndGradient.value_and_pullback!!(
         f::F, ȳ, backend::AutoMooncake, x::Vararg{Any, N}; cache=nothing,
     ) where {F, N}
-    config = something(backend.config, Config())
-    c = cache !== nothing ? cache : Mooncake.prepare_pullback_cache(f, x...; config)
+    c = cache !== nothing ? cache : Mooncake.prepare_pullback_cache(f, x...; config=something(backend.config, Config()))
     y, (_, x̄s...) = Mooncake.value_and_pullback!!(c, ȳ, f, x...)
     return y, x̄s
 end
@@ -25,8 +23,7 @@ end
 function ValueAndGradient.value_and_pushforward!!(
         f::F, ẋ, backend::AutoMooncakeForward, x::Vararg{Any, 1}; cache=nothing,
     ) where {F}
-    config = something(backend.config, Config())
-    c = cache !== nothing ? cache : Mooncake.prepare_derivative_cache(f, only(x); config)
+    c = cache !== nothing ? cache : Mooncake.prepare_derivative_cache(f, only(x); config=something(backend.config, Config()))
     df = Mooncake.zero_tangent(f)
     y, ẏ = Mooncake.value_and_derivative!!(c, (f, df), (only(x), ẋ))
     return y, ẏ
@@ -35,8 +32,7 @@ end
 function ValueAndGradient.value_and_pushforward!!(
         f::F, ẋ, backend::AutoMooncakeForward, x::Vararg{Any, N}; cache=nothing,
     ) where {F, N}
-    config = something(backend.config, Config())
-    c = cache !== nothing ? cache : Mooncake.prepare_derivative_cache(f, x...; config)
+    c = cache !== nothing ? cache : Mooncake.prepare_derivative_cache(f, x...; config=something(backend.config, Config()))
     df = Mooncake.zero_tangent(f)
     pairs = ntuple(k -> (x[k], ẋ[k]), Val(N))
     y, ẏ = Mooncake.value_and_derivative!!(c, (f, df), pairs...)
