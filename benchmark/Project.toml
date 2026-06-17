@@ -1,0 +1,8 @@
+[deps]
+ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
+ValueAndGradient = "b2a3a0f1-1884-4814-87af-a8eccdbd6af6"
+
+[sources]
+ValueAndGradient = {path = ".."}
