@@ -1,7 +1,7 @@
 module ValueAndGradientFiniteDifferencesExt
 
 using ValueAndGradient: ValueAndGradient
-using FiniteDifferences: central_fdm, grad, jvp, jacobian
+using FiniteDifferences: central_fdm, grad, jvp
 using Test: @test, @testset
 using ADTypes: AbstractADType
 
@@ -67,63 +67,6 @@ function ValueAndGradient.test_pushforward(f, ẋ, backend::AbstractADType, xs..
                                 jvp(_fdm, (args...) -> f(args...), ntuple(k -> (xs[k], ẋ[k]), Val(N))...)
                 @test _isapprox(_collect(ẏ), _collect(fd_ẏ); rtol, atol)
             end
-        end
-    end
-    return nothing
-end
-
-function ValueAndGradient.test_gradient(f, backend::AbstractADType, xs...; rtol=1e-5, atol=1e-5)
-    N = length(xs)
-    @testset "value_and_gradient!!: $(typeof(backend)), $(map(typeof, xs))" begin
-        y, x̄s = ValueAndGradient.value_and_gradient!!(f, backend, xs...)
-
-        @testset "value correct" begin
-            @test y == f(xs...)
-        end
-
-        @testset "gradient matches finite differences" begin
-            if N == 1
-                fd_x̄ = grad(_fdm, f, only(xs))[1]
-                @test _isapprox(_collect(x̄s), _collect(fd_x̄); rtol, atol)
-            else
-                for k in 1:N
-                    fk = xk -> f(ntuple(i -> i == k ? xk : xs[i], Val(N))...)
-                    fd_x̄k = grad(_fdm, fk, xs[k])[1]
-                    @test _isapprox(_collect(x̄s[k]), _collect(fd_x̄k); rtol, atol)
-                end
-            end
-        end
-    end
-    return nothing
-end
-
-function ValueAndGradient.test_derivative(f, backend::AbstractADType, x; rtol=1e-5, atol=1e-5)
-    @testset "value_and_derivative!!: $(typeof(backend)), $(typeof(x))" begin
-        y, ẏ = ValueAndGradient.value_and_derivative!!(f, backend, x)
-
-        @testset "value correct" begin
-            @test y == f(x)
-        end
-
-        @testset "derivative matches finite differences" begin
-            fd_ẏ = jvp(_fdm, f, (x, one(x)))
-            @test _isapprox(_collect(ẏ), _collect(fd_ẏ); rtol, atol)
-        end
-    end
-    return nothing
-end
-
-function ValueAndGradient.test_jacobian(f, backend::AbstractADType, x; rtol=1e-5, atol=1e-5)
-    @testset "value_and_jacobian!!: $(typeof(backend)), $(typeof(x))" begin
-        y, (J,) = ValueAndGradient.value_and_jacobian!!(f, backend, x)
-
-        @testset "value correct" begin
-            @test y == f(x)
-        end
-
-        @testset "jacobian matches finite differences" begin
-            fd_J = jacobian(_fdm, f, x)[1]
-            @test _isapprox(J, fd_J; rtol, atol)
         end
     end
     return nothing

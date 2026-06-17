@@ -1,6 +1,6 @@
 module ValueAndGradientMooncakeExt
 
-using ValueAndGradient: ValueAndGradient, DiffInput, DiffLeaf
+using ValueAndGradient: ValueAndGradient, DiffInput
 using ADTypes: AutoMooncake, AutoMooncakeForward
 using Mooncake: Mooncake, Config
 
@@ -47,69 +47,6 @@ function ValueAndGradient.value_and_pushforward!!(
     pairs = map((xi, ẋi) -> (xi, ẋi), (x1, x2, xrest...), ẋ)
     y, ẏ = Mooncake.value_and_derivative!!(c, (f, df), pairs...)
     return y, ẏ
-end
-
-function ValueAndGradient.value_and_derivative!!(
-        f::F, backend::AutoMooncakeForward, x::ValueAndGradient.DiffScalar;
-        ad_cache = nothing, canonical_tangents = false,
-    ) where {F}
-    c = ad_cache !== nothing ? ad_cache :
-        Mooncake.prepare_derivative_cache(f, x; config = _vg_config(backend))
-    df = Mooncake.zero_tangent(f)
-    y, ẏ = Mooncake.value_and_derivative!!(c, (f, df), (x, one(x)))
-    return y, ẏ
-end
-
-function ValueAndGradient.value_and_gradient!!(
-        f::F, backend::AutoMooncake, x::DiffInput;
-        ad_cache = nothing, canonical_tangents = false,
-    ) where {F}
-    c = ad_cache !== nothing ? ad_cache :
-        Mooncake.prepare_gradient_cache(f, x; config = _vg_config(backend))
-    y, (_, x̄) = Mooncake.value_and_gradient!!(c, f, x)
-    return y, x̄
-end
-
-function ValueAndGradient.value_and_gradient!!(
-        f::F, backend::AutoMooncake, x1::DiffInput, x2::DiffInput, xrest::DiffInput...;
-        ad_cache = nothing, canonical_tangents = false,
-    ) where {F}
-    c = ad_cache !== nothing ? ad_cache :
-        Mooncake.prepare_gradient_cache(f, x1, x2, xrest...; config = _vg_config(backend))
-    y, (_, x̄s...) = Mooncake.value_and_gradient!!(c, f, x1, x2, xrest...)
-    return y, x̄s
-end
-
-ValueAndGradient._prepare_jac_cache_forward(
-    f::F,
-    backend::AutoMooncakeForward,
-    xs::Tuple,
-) where {F} = Mooncake.prepare_derivative_cache(f, xs...; config = _vg_config(backend))
-
-ValueAndGradient._prepare_jac_cache_reverse(
-    f::F,
-    backend::AutoMooncake,
-    xs::Tuple,
-) where {F} = Mooncake.prepare_pullback_cache(f, xs...; config = _vg_config(backend))
-
-function ValueAndGradient.value_and_jacobian!!(
-        f::F, backend::AutoMooncake, x::AbstractVector{<:Base.IEEEFloat};
-        ad_cache = nothing, canonical_tangents = false,
-    ) where {F}
-    c = ad_cache !== nothing ? ad_cache :
-        Mooncake.prepare_pullback_cache(f, x; config = _vg_config(backend))
-    y, J = Mooncake.value_and_jacobian!!(c, f, x)
-    return y, (J,)
-end
-
-function ValueAndGradient.value_and_jacobian!!(
-        f::F, backend::AutoMooncakeForward, x::AbstractVector{<:Base.IEEEFloat};
-        ad_cache = nothing, canonical_tangents = false,
-    ) where {F}
-    c = ad_cache !== nothing ? ad_cache :
-        Mooncake.prepare_derivative_cache(f, x; config = _vg_config(backend))
-    y, J = Mooncake.value_and_jacobian!!(c, f, x)
-    return y, (J,)
 end
 
 end
