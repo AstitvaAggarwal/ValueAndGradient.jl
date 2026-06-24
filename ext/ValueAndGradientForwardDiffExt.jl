@@ -9,9 +9,16 @@ _perturb(x::Number, ẋ, t) = x + t * ẋ
 _perturb(x::Tuple, ẋ::Tuple, t) = map((xi, ẋi) -> _perturb(xi, ẋi, t), x, ẋ)
 
 function ValueAndGradient.value_and_pushforward!!(
-        f::F, ẋ, backend::AutoForwardDiff, xs...;
-        ad_cache=nothing, canonical_tangents=false, kwargs...) where {F}
-    ad_cache !== nothing && @warn "AutoForwardDiff does not support ad_cache; it will be ignored."
+    f::F,
+    ẋ,
+    backend::AutoForwardDiff,
+    xs...;
+    ad_cache = nothing,
+    canonical_tangents = false,
+    kwargs...,
+) where {F}
+    ad_cache !== nothing &&
+        @warn "AutoForwardDiff does not support ad_cache; it will be ignored."
     y = f(xs...)
     N = length(xs)
     if N == 1

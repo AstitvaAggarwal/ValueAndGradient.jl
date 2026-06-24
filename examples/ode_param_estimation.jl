@@ -25,19 +25,19 @@ using Printf
 
 # --- problem ---
 θ_true = [2.0]
-tspan  = (0.0, 1.0)
-tsave  = range(0.0, 1.0; length=11)
+tspan = (0.0, 1.0)
+tsave = range(0.0, 1.0; length = 11)
 
 ode_f(u, θ, t) = -θ .* u
 
 data = let
     prob = ODEProblem(ode_f, [1.0], tspan, θ_true)
-    Array(solve(prob, Tsit5(); saveat=tsave))
+    Array(solve(prob, Tsit5(); saveat = tsave))
 end
 
 function loss(θ)
     prob = ODEProblem(ode_f, [1.0], tspan, θ)
-    sol  = solve(prob, Tsit5(); saveat=tsave, abstol=1e-9, reltol=1e-9)
+    sol = solve(prob, Tsit5(); saveat = tsave, abstol = 1e-9, reltol = 1e-9)
     sum(abs2, Array(sol) .- data)
 end
 
@@ -45,9 +45,9 @@ end
 θ₀ = [1.5]
 
 backends = [
-    "AutoMooncake"          => AutoMooncake(config=nothing),
-    "AutoZygote"            => AutoZygote(),
-    "AutoFiniteDifferences" => AutoFiniteDifferences(fdm=central_fdm(5, 1)),
+    "AutoMooncake" => AutoMooncake(config = nothing),
+    "AutoZygote" => AutoZygote(),
+    "AutoFiniteDifferences" => AutoFiniteDifferences(fdm = central_fdm(5, 1)),
 ]
 
 println("ODE parameter estimation — ∂L/∂θ at θ=$(θ₀[1])\n")
@@ -67,7 +67,7 @@ successful = [(name, dθ) for ((name, _), dθ) in zip(backends, results) if dθ 
 if length(successful) >= 2
     ref = last(successful)[2]
     for (name, dθ) in successful
-        match = isapprox(dθ, ref; rtol=1e-4)
+        match = isapprox(dθ, ref; rtol = 1e-4)
         @printf("  %-24s  agrees with ref: %s\n", name, match ? "✓" : "✗ (rtol=1e-4)")
     end
 end
@@ -75,9 +75,9 @@ end
 # --- short gradient descent to verify convergence ---
 println("\nGradient descent (AutoMooncake, η=0.5, 20 steps):")
 θ = copy(θ₀)
-mc = AutoMooncake(config=nothing)
+mc = AutoMooncake(config = nothing)
 try
-    for step in 1:20
+    for step = 1:20
         y, dθ = value_and_pullback!!(loss, one(Float64), mc, θ)
         θ .-= 0.5 .* dθ
     end

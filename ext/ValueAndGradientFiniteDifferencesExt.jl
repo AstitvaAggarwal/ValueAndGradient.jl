@@ -5,9 +5,16 @@ using FiniteDifferences: jvp, j′vp
 using ADTypes: AutoFiniteDifferences
 
 function ValueAndGradient.value_and_pullback!!(
-        f::F, ȳ, backend::AutoFiniteDifferences, xs...;
-        ad_cache=nothing, canonical_tangents=false, kwargs...) where {F}
-    ad_cache !== nothing && @warn "AutoFiniteDifferences does not support ad_cache; it will be ignored."
+    f::F,
+    ȳ,
+    backend::AutoFiniteDifferences,
+    xs...;
+    ad_cache = nothing,
+    canonical_tangents = false,
+    kwargs...,
+) where {F}
+    ad_cache !== nothing &&
+        @warn "AutoFiniteDifferences does not support ad_cache; it will be ignored."
     fdm = backend.fdm
     y = f(xs...)
     x̄s = j′vp(fdm, f, ȳ, xs...)
@@ -21,9 +28,16 @@ function ValueAndGradient.value_and_pullback!!(
 end
 
 function ValueAndGradient.value_and_pushforward!!(
-        f::F, ẋ, backend::AutoFiniteDifferences, xs...;
-        ad_cache=nothing, canonical_tangents=false, kwargs...) where {F}
-    ad_cache !== nothing && @warn "AutoFiniteDifferences does not support ad_cache; it will be ignored."
+    f::F,
+    ẋ,
+    backend::AutoFiniteDifferences,
+    xs...;
+    ad_cache = nothing,
+    canonical_tangents = false,
+    kwargs...,
+) where {F}
+    ad_cache !== nothing &&
+        @warn "AutoFiniteDifferences does not support ad_cache; it will be ignored."
     fdm = backend.fdm
     y = f(xs...)
     N = length(xs)

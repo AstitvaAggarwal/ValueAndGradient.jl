@@ -17,9 +17,17 @@ _collect(x::Number) = x
 _collect(x::Tuple) = map(_collect, x)
 
 _isapprox(a, b; kw...) = isapprox(a, b; kw...)
-_isapprox(a::Tuple, b::Tuple; kw...) = all(_isapprox(ai, bi; kw...) for (ai, bi) in zip(a, b))
+_isapprox(a::Tuple, b::Tuple; kw...) =
+    all(_isapprox(ai, bi; kw...) for (ai, bi) in zip(a, b))
 
-function ValueAndGradient.test_pullback(f, ȳ, backend::AbstractADType, xs...; rtol=1e-5, atol=1e-5)
+function ValueAndGradient.test_pullback(
+    f,
+    ȳ,
+    backend::AbstractADType,
+    xs...;
+    rtol = 1e-5,
+    atol = 1e-5,
+)
     N = length(xs)
     @testset "value_and_pullback!!: $(typeof(backend)), $(map(typeof, xs))" begin
         y, x̄s = ValueAndGradient.value_and_pullback!!(f, ȳ, backend, xs...)
@@ -33,7 +41,7 @@ function ValueAndGradient.test_pullback(f, ȳ, backend::AbstractADType, xs...; r
                 fd_x̄ = grad(_fdm, t -> _vdot(ȳ, f(t)), only(xs))[1]
                 @test _isapprox(_collect(x̄s), _collect(fd_x̄); rtol, atol)
             else
-                for k in 1:N
+                for k = 1:N
                     fk = xk -> f(ntuple(i -> i == k ? xk : xs[i], Val(N))...)
                     fd_x̄k = grad(_fdm, t -> _vdot(ȳ, fk(t)), xs[k])[1]
                     @test _isapprox(_collect(x̄s[k]), _collect(fd_x̄k); rtol, atol)
@@ -44,7 +52,14 @@ function ValueAndGradient.test_pullback(f, ȳ, backend::AbstractADType, xs...; r
     return nothing
 end
 
-function ValueAndGradient.test_pushforward(f, ẋ, backend::AbstractADType, xs...; rtol=1e-5, atol=1e-5)
+function ValueAndGradient.test_pushforward(
+    f,
+    ẋ,
+    backend::AbstractADType,
+    xs...;
+    rtol = 1e-5,
+    atol = 1e-5,
+)
     N = length(xs)
     @testset "value_and_pushforward!!: $(typeof(backend)), $(map(typeof, xs))" begin
         y, ẏ = ValueAndGradient.value_and_pushforward!!(f, ẋ, backend, xs...)
@@ -58,13 +73,19 @@ function ValueAndGradient.test_pushforward(f, ẋ, backend::AbstractADType, xs..
                 ks = ẏ isa NamedTuple ? keys(ẏ) : eachindex(ẏ)
                 for k in ks
                     fk = N == 1 ? (t -> f(t)[k]) : ((args...) -> f(args...)[k])
-                    fd_ẏk = N == 1 ? jvp(_fdm, fk, (only(xs), ẋ)) :
-                                     jvp(_fdm, fk, ntuple(i -> (xs[i], ẋ[i]), Val(N))...)
+                    fd_ẏk =
+                        N == 1 ? jvp(_fdm, fk, (only(xs), ẋ)) :
+                        jvp(_fdm, fk, ntuple(i -> (xs[i], ẋ[i]), Val(N))...)
                     @test _isapprox(_collect(ẏ[k]), _collect(fd_ẏk); rtol, atol)
                 end
             else
-                fd_ẏ = N == 1 ? jvp(_fdm, f, (only(xs), ẋ)) :
-                                jvp(_fdm, (args...) -> f(args...), ntuple(k -> (xs[k], ẋ[k]), Val(N))...)
+                fd_ẏ =
+                    N == 1 ? jvp(_fdm, f, (only(xs), ẋ)) :
+                    jvp(
+                        _fdm,
+                        (args...) -> f(args...),
+                        ntuple(k -> (xs[k], ẋ[k]), Val(N))...,
+                    )
                 @test _isapprox(_collect(ẏ), _collect(fd_ẏ); rtol, atol)
             end
         end

@@ -10,8 +10,14 @@ _vdot(ȳ::Tuple, y::Tuple) = sum(_vdot(ȳi, yi) for (ȳi, yi) in zip(ȳ, y))
 _vdot(ȳ::NamedTuple{K}, y::NamedTuple{K}) where {K} = sum(_vdot(ȳ[k], y[k]) for k in K)
 
 function ValueAndGradient.value_and_pullback!!(
-        f::F, ȳ, backend::AutoReverseDiff, x::AbstractArray;
-        ad_cache=nothing, canonical_tangents=false, kwargs...) where {F}
+    f::F,
+    ȳ,
+    backend::AutoReverseDiff,
+    x::AbstractArray;
+    ad_cache = nothing,
+    canonical_tangents = false,
+    kwargs...,
+) where {F}
     y = f(x)
     if ad_cache !== nothing
         ∂x = similar(x)
@@ -24,9 +30,16 @@ function ValueAndGradient.value_and_pullback!!(
 end
 
 function ValueAndGradient.value_and_pullback!!(
-        f::F, ȳ, backend::AutoReverseDiff,
-        x1::AbstractArray, x2::AbstractArray, xrest::AbstractArray...;
-        ad_cache=nothing, canonical_tangents=false, kwargs...) where {F}
+    f::F,
+    ȳ,
+    backend::AutoReverseDiff,
+    x1::AbstractArray,
+    x2::AbstractArray,
+    xrest::AbstractArray...;
+    ad_cache = nothing,
+    canonical_tangents = false,
+    kwargs...,
+) where {F}
     xs = (x1, x2, xrest...)
     N = length(xs)
     y = f(xs...)

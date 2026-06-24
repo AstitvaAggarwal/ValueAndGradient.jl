@@ -27,24 +27,24 @@ const N = 5
 const b = ones(N)
 
 function make_A(θ)
-    diag_vals    = fill(θ[1], N)
+    diag_vals = fill(θ[1], N)
     offdiag_vals = fill(θ[2], N - 1)
     Tridiagonal(offdiag_vals, diag_vals, offdiag_vals)
 end
 
 function loss(θ)
-    A   = make_A(θ)
-    prob = LinearProblem(Matrix(A), b; sensealg=LinearSolveAdjoint())
-    sol  = solve(prob)
+    A = make_A(θ)
+    prob = LinearProblem(Matrix(A), b; sensealg = LinearSolveAdjoint())
+    sol = solve(prob)
     sum(abs2, sol.u)
 end
 
 θ₀ = [3.0, 0.5]
 
 backends = [
-    "AutoMooncake"          => AutoMooncake(config=nothing),
-    "AutoZygote"            => AutoZygote(),
-    "AutoFiniteDifferences" => AutoFiniteDifferences(fdm=central_fdm(5, 1)),
+    "AutoMooncake" => AutoMooncake(config = nothing),
+    "AutoZygote" => AutoZygote(),
+    "AutoFiniteDifferences" => AutoFiniteDifferences(fdm = central_fdm(5, 1)),
 ]
 
 println("LinearSolve gradient — ∂L/∂θ at θ=$θ₀\n")
@@ -67,9 +67,11 @@ else
     ref = last(refs)
     for ((name, _), dθ) in zip(backends, results)
         dθ === nothing && continue
-        match = isapprox(dθ, ref; rtol=1e-4)
+        match = isapprox(dθ, ref; rtol = 1e-4)
         @printf("  %-24s  agrees with FD: %s\n", name, match ? "✓" : "✗ (rtol=1e-4)")
     end
 end
 
-println("\n  Note: AutoZygote fails due to missing adjoint(::Tuple{LU}) in defaultalg_adjoint_eval (upstream LinearSolve bug).")
+println(
+    "\n  Note: AutoZygote fails due to missing adjoint(::Tuple{LU}) in defaultalg_adjoint_eval (upstream LinearSolve bug).",
+)

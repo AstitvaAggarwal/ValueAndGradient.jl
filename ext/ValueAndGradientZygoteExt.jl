@@ -5,9 +5,16 @@ using Zygote: Zygote
 using ADTypes: AutoZygote
 
 function ValueAndGradient.value_and_pullback!!(
-        f::F, ȳ, backend::AutoZygote, xs...;
-        ad_cache=nothing, canonical_tangents=false, kwargs...) where {F}
-    ad_cache !== nothing && @warn "AutoZygote does not support ad_cache; it will be ignored."
+    f::F,
+    ȳ,
+    backend::AutoZygote,
+    xs...;
+    ad_cache = nothing,
+    canonical_tangents = false,
+    kwargs...,
+) where {F}
+    ad_cache !== nothing &&
+        @warn "AutoZygote does not support ad_cache; it will be ignored."
     y, back = Zygote.pullback(f, xs...)
     x̄s = back(ȳ)
     if length(xs) == 1

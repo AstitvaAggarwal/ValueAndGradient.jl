@@ -34,17 +34,15 @@ ps_flat, re = Optimisers.destructure(ps)   # Float32 vector
 
 function loss(p)
     ps_nt = re(p)
-    ŷ, _  = Lux.apply(model, X, ps_nt, st)
+    ŷ, _ = Lux.apply(model, X, ps_nt, st)
     mean(abs2, ŷ .- Y)
 end
 
 # --- gradient check: Mooncake vs Zygote on one step ---
 println("Gradient check (one step, Mooncake vs Zygote):\n")
 
-check_backends = [
-    "AutoMooncake" => AutoMooncake(config=nothing),
-    "AutoZygote"   => AutoZygote(),
-]
+check_backends =
+    ["AutoMooncake" => AutoMooncake(config = nothing), "AutoZygote" => AutoZygote()]
 
 grads = map(check_backends) do (name, backend)
     y, dp = value_and_pullback!!(loss, one(Float32), backend, ps_flat)
@@ -52,16 +50,16 @@ grads = map(check_backends) do (name, backend)
     dp
 end
 
-match = isapprox(grads[1], grads[2]; rtol=1e-3)
+match = isapprox(grads[1], grads[2]; rtol = 1e-3)
 println("\n  Mooncake agrees with Zygote (rtol=1e-3): $(match ? "✓" : "✗")")
 
 # --- training loop with AutoMooncake ---
 println("\nTraining (AutoMooncake, η=0.01, 200 steps):")
-mc = AutoMooncake(config=nothing)
-p  = copy(ps_flat)
-η  = 0.01f0
+mc = AutoMooncake(config = nothing)
+p = copy(ps_flat)
+η = 0.01f0
 
-for step in 1:200
+for step = 1:200
     y, dp = value_and_pullback!!(loss, one(Float32), mc, p)
     p .-= η .* dp
     step in (1, 50, 100, 200) && @printf("  step %3d   loss = %.6f\n", step, y)

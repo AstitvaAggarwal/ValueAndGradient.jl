@@ -1,8 +1,15 @@
 using ValueAndGradient
 using FiniteDifferences, Test
-using ADTypes: AutoMooncake, AutoMooncakeForward, AutoFiniteDifferences,
-               AutoFiniteDiff, AutoForwardDiff, AutoReverseDiff, AutoTracker,
-               AutoZygote, AutoEnzyme
+using ADTypes:
+    AutoMooncake,
+    AutoMooncakeForward,
+    AutoFiniteDifferences,
+    AutoFiniteDiff,
+    AutoForwardDiff,
+    AutoReverseDiff,
+    AutoTracker,
+    AutoZygote,
+    AutoEnzyme
 using Mooncake: Mooncake
 using FiniteDiff: FiniteDiff
 using ForwardDiff: ForwardDiff
@@ -13,11 +20,13 @@ using Enzyme: Enzyme
 using LinearAlgebra
 
 struct VGOutput{T}
-    a::T; b::T
+    a::T;
+    b::T
 end
 
 struct NoCanonStruct
-    a::Float64; b::Float64
+    a::Float64;
+    b::Float64
     NoCanonStruct() = new(0.0, 0.0)  # inner constructor blocks default (a,b) positional form
 end
 
@@ -40,13 +49,32 @@ end
             test_pullback(x -> (x[1]^2, x[2]^2), (one(T), one(T)), backend, T[1, 2])
             test_pullback(x -> (sum(x), x .^ 2), (one(T), T[1, 1, 1]), backend, T[1, 2, 3])
             test_pullback(x -> real(x * conj(x)), one(T), backend, CT(1, 2))
-            test_pullback(x -> real(sum(x .* conj.(x))), one(T), backend, CT[CT(1, 2), CT(3, 4)])
-            test_pullback(x -> (a = sum(x .^ 2), b = x[1] + x[2]), (a = one(T), b = one(T)), backend, T[1, 2, 3])
-            test_pullback((x, y) -> (a = sum(x .* y), b = x[1] + y[1]), (a = one(T), b = one(T)), backend, T[1, 2], T[3, 4])
+            test_pullback(
+                x -> real(sum(x .* conj.(x))),
+                one(T),
+                backend,
+                CT[CT(1, 2), CT(3, 4)],
+            )
+            test_pullback(
+                x -> (a = sum(x .^ 2), b = x[1] + x[2]),
+                (a = one(T), b = one(T)),
+                backend,
+                T[1, 2, 3],
+            )
+            test_pullback(
+                (x, y) -> (a = sum(x .* y), b = x[1] + y[1]),
+                (a = one(T), b = one(T)),
+                backend,
+                T[1, 2],
+                T[3, 4],
+            )
             @testset "struct output (array → VGOutput)" begin
                 f = x -> VGOutput(sum(x .^ 2), x[1] + x[2])
                 x = T[1, 2, 3]
-                ȳ = Mooncake.Tangent{NamedTuple{(:a, :b), Tuple{T, T}}}((a = one(T), b = one(T)))
+                ȳ = Mooncake.Tangent{NamedTuple{(:a, :b),Tuple{T,T}}}((
+                    a = one(T),
+                    b = one(T),
+                ))
                 y, x̄ = value_and_pullback!!(f, ȳ, backend, x)
                 @test y isa VGOutput{T}
                 @test x̄ ≈ 2 .* x + T[1, 1, 0]
@@ -75,14 +103,36 @@ end
             test_pushforward(x -> sum(x .^ 2), T[1, 0, 0], backend, T[1, 2, 3])
             test_pushforward(x -> x .^ 2, T[0, 1, -1], backend, T[1, 2, 3])
             test_pushforward(x -> x[1]^2 + x[2]^2, (one(T), one(T)), backend, (T(1), T(2)))
-            test_pushforward((x, y) -> sum(x .* y), (T[1, 0], T[0, 1]), backend, T[1, 2], T[3, 4])
+            test_pushforward(
+                (x, y) -> sum(x .* y),
+                (T[1, 0], T[0, 1]),
+                backend,
+                T[1, 2],
+                T[3, 4],
+            )
             test_pushforward(x -> (x[1]^2, x[2]^2), T[1, 1], backend, T[1, 2])
             test_pushforward(x -> (sum(x), x .^ 2), ones(T, 3), backend, T[1, 2, 3])
             test_pushforward(x -> real(x * conj(x)), one(CT), backend, CT(1, 2))
-            test_pushforward(x -> real(sum(x .* conj.(x))), CT[one(CT), one(CT)], backend, CT[CT(1, 2), CT(3, 4)])
+            test_pushforward(
+                x -> real(sum(x .* conj.(x))),
+                CT[one(CT), one(CT)],
+                backend,
+                CT[CT(1, 2), CT(3, 4)],
+            )
             test_pushforward(x -> Complex(x^2, x), one(T), backend, T(3))
-            test_pushforward(x -> (a = sum(x .^ 2), b = x[1] + x[2]), ones(T, 3), backend, T[1, 2, 3])
-            test_pushforward((x, y) -> (a = sum(x .* y), b = x[1] + y[1]), (T[1, 0], T[0, 1]), backend, T[1, 2], T[3, 4])
+            test_pushforward(
+                x -> (a = sum(x .^ 2), b = x[1] + x[2]),
+                ones(T, 3),
+                backend,
+                T[1, 2, 3],
+            )
+            test_pushforward(
+                (x, y) -> (a = sum(x .* y), b = x[1] + y[1]),
+                (T[1, 0], T[0, 1]),
+                backend,
+                T[1, 2],
+                T[3, 4],
+            )
             @testset "array → struct (VGOutput)" begin
                 f = x -> VGOutput(sum(x .^ 2), x[1] + x[2])
                 x = T[1, 2, 3]
@@ -208,9 +258,19 @@ end
 
     @testset "fallback warnings" begin
         # Forward-mode backend used for pullback: warns and falls back via pushforward calls
-        @test_warn "not natively supported" value_and_pullback!!(x -> x^2, 1.0, AutoMooncakeForward(config = nothing), 2.0)
+        @test_warn "not natively supported" value_and_pullback!!(
+            x -> x^2,
+            1.0,
+            AutoMooncakeForward(config = nothing),
+            2.0,
+        )
         # Reverse-mode backend used for pushforward: warns and falls back via pullback calls
-        @test_warn "not natively supported" value_and_pushforward!!(x -> x^2, 1.0, AutoMooncake(config = nothing), 2.0)
+        @test_warn "not natively supported" value_and_pushforward!!(
+            x -> x^2,
+            1.0,
+            AutoMooncake(config = nothing),
+            2.0,
+        )
     end
 
     # ---- AutoFiniteDifferences (both ops) ----
@@ -230,19 +290,41 @@ end
             test_pushforward(x -> x^2, one(T), fdm_backend, T(3))
             test_pushforward(x -> sum(x .^ 2), T[1, 0, 0], fdm_backend, T[1, 2, 3])
             test_pushforward(x -> x .^ 2, T[0, 1, -1], fdm_backend, T[1, 2, 3])
-            test_pushforward((x, y) -> sum(x .* y), (T[1, 0], T[0, 1]), fdm_backend, T[1, 2], T[3, 4])
+            test_pushforward(
+                (x, y) -> sum(x .* y),
+                (T[1, 0], T[0, 1]),
+                fdm_backend,
+                T[1, 2],
+                T[3, 4],
+            )
         end
 
         CT = Complex{T}
         @testset "pullback AutoFiniteDifferences complex T=$T" begin
             test_pullback(x -> real(x * conj(x)), one(T), fdm_backend, CT(1, 2))
-            test_pullback(x -> real(sum(x .* conj.(x))), one(T), fdm_backend, CT[CT(1, 2), CT(3, 4)])
-            test_pullback((x, y) -> real(sum(x .* conj.(y))), one(T), fdm_backend, CT[CT(1, 2)], CT[CT(3, 4)])
+            test_pullback(
+                x -> real(sum(x .* conj.(x))),
+                one(T),
+                fdm_backend,
+                CT[CT(1, 2), CT(3, 4)],
+            )
+            test_pullback(
+                (x, y) -> real(sum(x .* conj.(y))),
+                one(T),
+                fdm_backend,
+                CT[CT(1, 2)],
+                CT[CT(3, 4)],
+            )
         end
 
         @testset "pushforward AutoFiniteDifferences complex T=$T" begin
             test_pushforward(x -> real(x * conj(x)), one(CT), fdm_backend, CT(1, 2))
-            test_pushforward(x -> real(sum(x .* conj.(x))), CT[one(CT), one(CT)], fdm_backend, CT[CT(1, 2), CT(3, 4)])
+            test_pushforward(
+                x -> real(sum(x .* conj.(x))),
+                CT[one(CT), one(CT)],
+                fdm_backend,
+                CT[CT(1, 2), CT(3, 4)],
+            )
         end
     end
 
@@ -261,9 +343,31 @@ end
         @testset "pushforward AutoFiniteDiff T=$T" begin
             # Float32 central differences have ~1e-4 cancellation error; Float64 uses default 1e-5.
             tol = T === Float32 ? 1e-2 : 1e-5
-            test_pushforward(x -> sum(x .^ 2), T[1, 0, 0], fd_backend, T[1, 2, 3]; rtol=tol, atol=tol)
-            test_pushforward(x -> x .^ 2, T[0, 1, -1], fd_backend, T[1, 2, 3]; rtol=tol, atol=tol)
-            test_pushforward((x, y) -> sum(x .* y), (T[1, 0], T[0, 1]), fd_backend, T[1, 2], T[3, 4]; rtol=tol, atol=tol)
+            test_pushforward(
+                x -> sum(x .^ 2),
+                T[1, 0, 0],
+                fd_backend,
+                T[1, 2, 3];
+                rtol = tol,
+                atol = tol,
+            )
+            test_pushforward(
+                x -> x .^ 2,
+                T[0, 1, -1],
+                fd_backend,
+                T[1, 2, 3];
+                rtol = tol,
+                atol = tol,
+            )
+            test_pushforward(
+                (x, y) -> sum(x .* y),
+                (T[1, 0], T[0, 1]),
+                fd_backend,
+                T[1, 2],
+                T[3, 4];
+                rtol = tol,
+                atol = tol,
+            )
         end
 
         @testset "cached pullback AutoFiniteDiff T=$T" begin
@@ -289,7 +393,13 @@ end
             test_pushforward(x -> x^2, one(T), fwd_backend, T(3))
             test_pushforward(x -> sum(x .^ 2), T[1, 0, 0], fwd_backend, T[1, 2, 3])
             test_pushforward(x -> x .^ 2, T[0, 1, -1], fwd_backend, T[1, 2, 3])
-            test_pushforward((x, y) -> sum(x .* y), (T[1, 0], T[0, 1]), fwd_backend, T[1, 2], T[3, 4])
+            test_pushforward(
+                (x, y) -> sum(x .* y),
+                (T[1, 0], T[0, 1]),
+                fwd_backend,
+                T[1, 2],
+                T[3, 4],
+            )
         end
 
         @testset "pullback AutoForwardDiff (derived via pushforward) T=$T" begin
@@ -299,7 +409,12 @@ end
             test_pullback(x -> x .^ 2, T[2, -1, 3], fwd_backend, T[1, 2, 3])
             test_pullback((x, y) -> sum(x .* y), one(T), fwd_backend, T[1, 2], T[3, 4])
             test_pullback(x -> (x[1]^2, x[2]^2), (one(T), one(T)), fwd_backend, T[1, 2])
-            test_pullback(x -> (a = x[1]^2, b = x[2]^2), (a = one(T), b = one(T)), fwd_backend, T[1, 2])
+            test_pullback(
+                x -> (a = x[1]^2, b = x[2]^2),
+                (a = one(T), b = one(T)),
+                fwd_backend,
+                T[1, 2],
+            )
         end
     end
 
@@ -331,7 +446,8 @@ end
             f2 = (x, y) -> sum(x .* y)
             x2, y2 = T[1, 2], T[3, 4]
             cache2 = ReverseDiff.compile(ReverseDiff.GradientTape(f2, (x2, y2)))
-            val, x̄s = value_and_pullback!!(f2, one(T), rd_backend, x2, y2; ad_cache = cache2)
+            val, x̄s =
+                value_and_pullback!!(f2, one(T), rd_backend, x2, y2; ad_cache = cache2)
             @test val ≈ f2(x2, y2)
             @test x̄s[1] ≈ y2
             @test x̄s[2] ≈ x2
@@ -345,7 +461,13 @@ end
             # Falls back to m pullback calls — warns but produces correct result
             test_pushforward(x -> sum(x .^ 2), T[1, 0, 0], rd_backend, T[1, 2, 3])
             test_pushforward(x -> x .^ 2, T[0, 1, -1], rd_backend, T[1, 2, 3])
-            test_pushforward((x, y) -> sum(x .* y), (T[1, 0], T[0, 1]), rd_backend, T[1, 2], T[3, 4])
+            test_pushforward(
+                (x, y) -> sum(x .* y),
+                (T[1, 0], T[0, 1]),
+                rd_backend,
+                T[1, 2],
+                T[3, 4],
+            )
             test_pushforward(x -> (x[1]^2, x[2]^2), T[1, 1], rd_backend, T[1, 2])
             test_pushforward(x -> (a = x[1]^2, b = x[2]^2), T[1, 1], rd_backend, T[1, 2])
         end
@@ -366,7 +488,13 @@ end
         @testset "pushforward AutoTracker (derived via pullback) T=$T" begin
             test_pushforward(x -> sum(x .^ 2), T[1, 0, 0], tk_backend, T[1, 2, 3])
             test_pushforward(x -> x .^ 2, T[0, 1, -1], tk_backend, T[1, 2, 3])
-            test_pushforward((x, y) -> sum(x .* y), (T[1, 0], T[0, 1]), tk_backend, T[1, 2], T[3, 4])
+            test_pushforward(
+                (x, y) -> sum(x .* y),
+                (T[1, 0], T[0, 1]),
+                tk_backend,
+                T[1, 2],
+                T[3, 4],
+            )
             test_pushforward(x -> (x[1]^2, x[2]^2), T[1, 1], tk_backend, T[1, 2])
             test_pushforward(x -> (a = x[1]^2, b = x[2]^2), T[1, 1], tk_backend, T[1, 2])
         end
@@ -389,7 +517,13 @@ end
             test_pushforward(x -> x^2, one(T), zy_backend, T(3))
             test_pushforward(x -> sum(x .^ 2), T[1, 0, 0], zy_backend, T[1, 2, 3])
             test_pushforward(x -> x .^ 2, T[0, 1, -1], zy_backend, T[1, 2, 3])
-            test_pushforward((x, y) -> sum(x .* y), (T[1, 0], T[0, 1]), zy_backend, T[1, 2], T[3, 4])
+            test_pushforward(
+                (x, y) -> sum(x .* y),
+                (T[1, 0], T[0, 1]),
+                zy_backend,
+                T[1, 2],
+                T[3, 4],
+            )
             test_pushforward(x -> (x[1]^2, x[2]^2), T[1, 1], zy_backend, T[1, 2])
             test_pushforward(x -> (a = x[1]^2, b = x[2]^2), T[1, 1], zy_backend, T[1, 2])
         end
@@ -397,12 +531,22 @@ end
         CT = Complex{T}
         @testset "pullback AutoZygote complex T=$T" begin
             test_pullback(x -> real(x * conj(x)), one(T), zy_backend, CT(1, 2))
-            test_pullback(x -> real(sum(x .* conj.(x))), one(T), zy_backend, CT[CT(1, 2), CT(3, 4)])
+            test_pullback(
+                x -> real(sum(x .* conj.(x))),
+                one(T),
+                zy_backend,
+                CT[CT(1, 2), CT(3, 4)],
+            )
         end
 
         @testset "pushforward AutoZygote complex (derived) T=$T" begin
             test_pushforward(x -> real(x * conj(x)), one(CT), zy_backend, CT(1, 2))
-            test_pushforward(x -> real(sum(x .* conj.(x))), CT[one(CT), one(CT)], zy_backend, CT[CT(1, 2), CT(3, 4)])
+            test_pushforward(
+                x -> real(sum(x .* conj.(x))),
+                CT[one(CT), one(CT)],
+                zy_backend,
+                CT[CT(1, 2), CT(3, 4)],
+            )
         end
     end
 
@@ -413,7 +557,7 @@ end
         f = (x, y) -> sum(x .^ 2)
         x = Float64[1.0, 2.0]
         y = Float64[3.0, 4.0]
-        _, x̄s = value_and_pullback!!(f, 1.0, AutoZygote(), x, y; canonical_tangents=true)
+        _, x̄s = value_and_pullback!!(f, 1.0, AutoZygote(), x, y; canonical_tangents = true)
         @test x̄s[1] ≈ 2 .* x
         @test x̄s[2] ≈ zero(y)
     end
@@ -422,10 +566,10 @@ end
         f = x -> VGOutput(sum(x .^ 2), x[1] + x[2])
         x = Float64[1.0, 2.0, 3.0]
         ẋ = ones(Float64, 3)
-        backend = AutoMooncakeForward(config=nothing)
+        backend = AutoMooncakeForward(config = nothing)
         y_raw, ẏ_raw = value_and_pushforward!!(f, ẋ, backend, x)
         @test ẏ_raw isa Mooncake.Tangent  # default: raw Mooncake.Tangent
-        y2, ẏ2 = value_and_pushforward!!(f, ẋ, backend, x; canonical_tangents=true)
+        y2, ẏ2 = value_and_pushforward!!(f, ẋ, backend, x; canonical_tangents = true)
         @test ẏ2 isa VGOutput{Float64}    # canonical: reconstructed struct
         @test ẏ2.a ≈ sum(2 .* x .* ẋ)
         @test ẏ2.b ≈ 2.0
@@ -434,9 +578,9 @@ end
     @testset "canonical_tangents: DiffLeaf tangent unchanged (AutoFiniteDifferences)" begin
         f = x -> sum(x .^ 2)
         x = Float64[1.0, 2.0, 3.0]
-        backend = AutoFiniteDifferences(fdm=central_fdm(5, 1))
-        _, x̄_false = value_and_pullback!!(f, 1.0, backend, x; canonical_tangents=false)
-        _, x̄_true  = value_and_pullback!!(f, 1.0, backend, x; canonical_tangents=true)
+        backend = AutoFiniteDifferences(fdm = central_fdm(5, 1))
+        _, x̄_false = value_and_pullback!!(f, 1.0, backend, x; canonical_tangents = false)
+        _, x̄_true = value_and_pullback!!(f, 1.0, backend, x; canonical_tangents = true)
         @test x̄_false ≈ x̄_true
     end
 
@@ -463,7 +607,13 @@ end
         @testset "pushforward AutoEnzyme T=$T" begin
             test_pushforward(x -> sum(x .^ 2), T[1, 0, 0], enz_fwd, T[1, 2, 3])
             test_pushforward(x -> x .^ 2, T[0, 1, -1], enz_fwd, T[1, 2, 3])
-            test_pushforward((x, y) -> sum(x .* y), (T[1, 0], T[0, 1]), enz_fwd, T[1, 2], T[3, 4])
+            test_pushforward(
+                (x, y) -> sum(x .* y),
+                (T[1, 0], T[0, 1]),
+                enz_fwd,
+                T[1, 2],
+                T[3, 4],
+            )
         end
     end
 

@@ -3,13 +3,13 @@ module ValueAndGradient
 using ADTypes: AbstractADType, mode, ForwardMode, ReverseMode
 
 "IEEE floats and their complex counterparts: `Float16/32/64` and `Complex{<:IEEEFloat}`."
-const DiffScalar = Union{Base.IEEEFloat, Complex{<:Base.IEEEFloat}}
+const DiffScalar = Union{Base.IEEEFloat,Complex{<:Base.IEEEFloat}}
 
 "Any `AbstractArray` whose element type is a `DiffScalar`."
 const DiffArray = AbstractArray{<:DiffScalar}
 
 "A single differentiable value: scalar or array of scalars (`DiffScalar | DiffArray`)."
-const DiffLeaf = Union{DiffScalar, DiffArray}
+const DiffLeaf = Union{DiffScalar,DiffArray}
 
 """
     DiffInput
@@ -17,7 +17,7 @@ const DiffLeaf = Union{DiffScalar, DiffArray}
 The set of input types accepted by `value_and_pullback!!` and `value_and_pushforward!!`:
 a single `DiffLeaf` (scalar or array), or a `Tuple` of `DiffLeaf`s for multi-input functions.
 """
-const DiffInput = Union{DiffLeaf, Tuple{Vararg{DiffLeaf}}}
+const DiffInput = Union{DiffLeaf,Tuple{Vararg{DiffLeaf}}}
 
 """
     value_and_pullback!!(f, ȳ, backend, x...; ad_cache=nothing, canonical_tangents=false) -> (y, x̄)
@@ -71,7 +71,8 @@ function test_pushforward end
 # internal helpers
 
 _vdot(a::Number, b::Number) = real(conj(a) * b)
-_vdot(a::AbstractArray, b::AbstractArray) = real(sum(conj(ai) * bi for (ai, bi) in zip(a, b)))
+_vdot(a::AbstractArray, b::AbstractArray) =
+    real(sum(conj(ai) * bi for (ai, bi) in zip(a, b)))
 _vdot(a::Tuple, b::Tuple) = sum(_vdot(ai, bi) for (ai, bi) in zip(a, b))
 _vdot(a::NamedTuple{K}, b::NamedTuple{K}) where {K} = sum(_vdot(a[k], b[k]) for k in K)
 
@@ -124,7 +125,7 @@ function _pf_from_pb(f::F, y::Tuple, ẋ, backend, xs...; kwargs...) where {F}
     end
 end
 
-function _pf_from_pb(f::F, y::NamedTuple{Ks}, ẋ, backend, xs...; kwargs...) where {F, Ks}
+function _pf_from_pb(f::F, y::NamedTuple{Ks}, ẋ, backend, xs...; kwargs...) where {F,Ks}
     vals = ntuple(length(Ks)) do i
         k = Ks[i]
         fk = (args...) -> f(args...)[k]
@@ -134,11 +135,13 @@ function _pf_from_pb(f::F, y::NamedTuple{Ks}, ẋ, backend, xs...; kwargs...) wh
 end
 
 function _pf_from_pb(f::F, y, ẋ, backend, xs...; kwargs...) where {F}
-    throw(ArgumentError(
-        "Derived pushforward via pullback does not support output type $(typeof(y)). " *
-        "Use a native forward-mode backend: AutoMooncakeForward, AutoForwardDiff, " *
-        "AutoFiniteDiff, AutoFiniteDifferences, or AutoEnzyme(mode=Enzyme.Forward)."
-    ))
+    throw(
+        ArgumentError(
+            "Derived pushforward via pullback does not support output type $(typeof(y)). " *
+            "Use a native forward-mode backend: AutoMooncakeForward, AutoForwardDiff, " *
+            "AutoFiniteDiff, AutoFiniteDifferences, or AutoEnzyme(mode=Enzyme.Forward).",
+        ),
+    )
 end
 
 # Derive x̄ = Jᵀȳ by running n pushforward calls (one per input element).
@@ -162,19 +165,23 @@ function _pullback_via_pushforward(f::F, ȳ, backend, xs...; kwargs...) where {F
             end
             return y, x̄
         else
-            throw(ArgumentError(
-                "Derived pullback via pushforward requires scalar or AbstractArray input. Got $(typeof(x))."
-            ))
+            throw(
+                ArgumentError(
+                    "Derived pullback via pushforward requires scalar or AbstractArray input. Got $(typeof(x)).",
+                ),
+            )
         end
     else
         x̄s = ntuple(N) do k
             xk = xs[k]
-            xk isa AbstractArray || throw(ArgumentError(
-                "Derived pullback via pushforward: multi-arg inputs must be AbstractArray. Got $(typeof(xk))."
-            ))
+            xk isa AbstractArray || throw(
+                ArgumentError(
+                    "Derived pullback via pushforward: multi-arg inputs must be AbstractArray. Got $(typeof(xk)).",
+                ),
+            )
             similar(xk, real(eltype(xk)))
         end
-        for k in 1:N
+        for k = 1:N
             for i in eachindex(xs[k])
                 ẋ = ntuple(N) do j
                     if j == k
@@ -201,11 +208,13 @@ function value_and_pullback!!(f, ȳ, backend::AbstractADType, xs...; kwargs...)
               "pushforward call(s). Use value_and_pushforward!! for efficiency."
         return _pullback_via_pushforward(f, ȳ, backend, xs...; kwargs...)
     else
-        throw(ArgumentError(
-            "value_and_pullback!! is not supported for $(typeof(backend)). " *
-            "Use a reverse-mode backend: AutoMooncake, AutoReverseDiff, AutoZygote, " *
-            "AutoTracker, or AutoEnzyme(mode=Enzyme.Reverse).",
-        ))
+        throw(
+            ArgumentError(
+                "value_and_pullback!! is not supported for $(typeof(backend)). " *
+                "Use a reverse-mode backend: AutoMooncake, AutoReverseDiff, AutoZygote, " *
+                "AutoTracker, or AutoEnzyme(mode=Enzyme.Reverse).",
+            ),
+        )
     end
 end
 
@@ -216,17 +225,16 @@ function value_and_pushforward!!(f, ẋ, backend::AbstractADType, xs...; kwargs.
               "Use value_and_pullback!! for efficiency."
         return _pushforward_via_pullback(f, ẋ, backend, xs...; kwargs...)
     else
-        throw(ArgumentError(
-            "value_and_pushforward!! is not supported for $(typeof(backend)). " *
-            "Use a forward-mode backend: AutoMooncakeForward, AutoForwardDiff, " *
-            "AutoFiniteDiff, AutoFiniteDifferences, or AutoEnzyme(mode=Enzyme.Forward).",
-        ))
+        throw(
+            ArgumentError(
+                "value_and_pushforward!! is not supported for $(typeof(backend)). " *
+                "Use a forward-mode backend: AutoMooncakeForward, AutoForwardDiff, " *
+                "AutoFiniteDiff, AutoFiniteDifferences, or AutoEnzyme(mode=Enzyme.Forward).",
+            ),
+        )
     end
 end
 
-export value_and_pullback!!,
-    value_and_pushforward!!,
-    test_pullback,
-    test_pushforward
+export value_and_pullback!!, value_and_pushforward!!, test_pullback, test_pushforward
 
 end

@@ -34,8 +34,8 @@ end
 θ₀ = [2.0]
 
 backends = [
-    "AutoForwardDiff"       => AutoForwardDiff(),
-    "AutoFiniteDifferences" => AutoFiniteDifferences(fdm=central_fdm(5, 1)),
+    "AutoForwardDiff" => AutoForwardDiff(),
+    "AutoFiniteDifferences" => AutoFiniteDifferences(fdm = central_fdm(5, 1)),
 ]
 
 println("Integral gradient — ∂I/∂θ at θ=$(θ₀[1])\n")
@@ -57,9 +57,11 @@ ref = analytical(θ₀)
 any(!isnothing, results) || println("  (all backends failed — no comparison possible)")
 for ((name, _), dθ) in zip(backends, results)
     dθ === nothing && continue
-    match = isapprox(dθ[1], ref; rtol=1e-4)
+    match = isapprox(dθ[1], ref; rtol = 1e-4)
     @printf("  %-24s  agrees with analytical: %s\n", name, match ? "✓" : "✗ (rtol=1e-4)")
 end
 
-println("\n  AutoMooncake: requires Integrals v5+ (conflicts with Mooncake 0.5 SciMLBase compat in this env).
-  AutoZygote: segfaults on Julia 1.12 + QuadGK (upstream issue).")
+println(
+    "\n  AutoMooncake: requires Integrals v5+ (conflicts with Mooncake 0.5 SciMLBase compat in this env).
+AutoZygote: segfaults on Julia 1.12 + QuadGK (upstream issue).",
+)
