@@ -7,25 +7,50 @@ authors = ["AstitvaAggarwal <astitvaaggarwalimportant@gmail.com>"]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
 
 [weakdeps]
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+FiniteDiff = "6a86dc24-6348-571c-b903-95158fe2bd41"
 FiniteDifferences = "26cc04aa-876d-5657-8c51-4c34ba976000"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
+ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Tracker = "9f7883ad-71c0-57eb-9f7f-b5c9e6d3789c"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [extensions]
-ValueAndGradientFiniteDifferencesExt = ["FiniteDifferences", "Test"]
+ValueAndGradientEnzymeExt = "Enzyme"
+ValueAndGradientFiniteDiffExt = "FiniteDiff"
+ValueAndGradientFiniteDifferencesExt = "FiniteDifferences"
+ValueAndGradientFiniteDifferencesTestExt = ["FiniteDifferences", "Test"]
+ValueAndGradientForwardDiffExt = "ForwardDiff"
 ValueAndGradientMooncakeExt = "Mooncake"
-
-[extras]
-FiniteDifferences = "26cc04aa-876d-5657-8c51-4c34ba976000"
-LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-
-[targets]
-test = ["FiniteDifferences", "LinearAlgebra", "Mooncake", "Test"]
+ValueAndGradientReverseDiffExt = "ReverseDiff"
+ValueAndGradientTrackerExt = "Tracker"
+ValueAndGradientZygoteExt = "Zygote"
 
 [compat]
 ADTypes = "1"
+Enzyme = "0.13"
+FiniteDiff = "2.26"
 FiniteDifferences = "0.12"
+ForwardDiff = "0.10, 1"
 Mooncake = "0.4, 0.5, 0.6"
+ReverseDiff = "1"
+Tracker = "0.2"
+Zygote = "0.6"
 julia = "1.10"
+
+[extras]
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+FiniteDiff = "6a86dc24-6348-571c-b903-95158fe2bd41"
+FiniteDifferences = "26cc04aa-876d-5657-8c51-4c34ba976000"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
+ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Tracker = "9f7883ad-71c0-57eb-9f7f-b5c9e6d3789c"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
+
+[targets]
+test = ["Enzyme", "FiniteDiff", "FiniteDifferences", "ForwardDiff", "LinearAlgebra", "Mooncake", "ReverseDiff", "Test", "Tracker", "Zygote"]

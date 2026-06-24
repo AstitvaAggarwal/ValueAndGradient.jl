@@ -1,0 +1,48 @@
+module ValueAndGradientReverseDiffExt
+
+using ValueAndGradient: ValueAndGradient
+using ReverseDiff: ReverseDiff
+using ADTypes: AutoReverseDiff
+
+_vdot(ȳ::Number, y::Number) = real(conj(ȳ) * y)
+_vdot(ȳ::AbstractArray, y::AbstractArray) = real(sum(conj.(ȳ) .* y))
+_vdot(ȳ::Tuple, y::Tuple) = sum(_vdot(ȳi, yi) for (ȳi, yi) in zip(ȳ, y))
+_vdot(ȳ::NamedTuple{K}, y::NamedTuple{K}) where {K} = sum(_vdot(ȳ[k], y[k]) for k in K)
+
+function ValueAndGradient.value_and_pullback!!(
+        f::F, ȳ, backend::AutoReverseDiff, x::AbstractArray;
+        ad_cache=nothing, canonical_tangents=false, kwargs...) where {F}
+    y = f(x)
+    if ad_cache !== nothing
+        ∂x = similar(x)
+        ReverseDiff.gradient!(∂x, ad_cache, x)
+        return y, canonical_tangents ? ValueAndGradient._canonicalize(x, ∂x) : ∂x
+    else
+        x̄ = ReverseDiff.gradient(xi -> _vdot(ȳ, f(xi)), x)
+        return y, canonical_tangents ? ValueAndGradient._canonicalize(x, x̄) : x̄
+    end
+end
+
+function ValueAndGradient.value_and_pullback!!(
+        f::F, ȳ, backend::AutoReverseDiff,
+        x1::AbstractArray, x2::AbstractArray, xrest::AbstractArray...;
+        ad_cache=nothing, canonical_tangents=false, kwargs...) where {F}
+    xs = (x1, x2, xrest...)
+    N = length(xs)
+    y = f(xs...)
+    if ad_cache !== nothing
+        ∂xs = map(similar, xs)
+        ReverseDiff.gradient!(∂xs, ad_cache, xs)
+        return y, canonical_tangents ? ValueAndGradient._canonicalize(xs, ∂xs) : ∂xs
+    else
+        x̄s = ntuple(N) do k
+            ReverseDiff.gradient(
+                xk -> _vdot(ȳ, f(ntuple(i -> i == k ? xk : xs[i], Val(N))...)),
+                xs[k],
+            )
+        end
+        return y, canonical_tangents ? ValueAndGradient._canonicalize(xs, x̄s) : x̄s
+    end
+end
+
+end
