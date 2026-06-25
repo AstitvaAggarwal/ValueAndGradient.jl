@@ -19,9 +19,9 @@ function ValueAndGradient.value_and_pullback!!(
     x̄s = back(ȳ)
     if length(xs) == 1
         x̄ = only(x̄s)
-        return y, canonical_tangents ? ValueAndGradient._canonicalize(only(xs), x̄) : x̄
+        return y, canonical_tangents ? ValueAndGradient._canonicalize(only(xs), x̄, backend) : x̄
     else
-        return y, canonical_tangents ? ValueAndGradient._canonicalize(xs, x̄s) : x̄s
+        return y, canonical_tangents ? ValueAndGradient._canonicalize(xs, x̄s, backend) : x̄s
     end
 end
 

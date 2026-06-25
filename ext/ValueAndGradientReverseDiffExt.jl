@@ -22,10 +22,10 @@ function ValueAndGradient.value_and_pullback!!(
     if ad_cache !== nothing
         ∂x = similar(x)
         ReverseDiff.gradient!(∂x, ad_cache, x)
-        return y, canonical_tangents ? ValueAndGradient._canonicalize(x, ∂x) : ∂x
+        return y, canonical_tangents ? ValueAndGradient._canonicalize(x, ∂x, backend) : ∂x
     else
         x̄ = ReverseDiff.gradient(xi -> _vdot(ȳ, f(xi)), x)
-        return y, canonical_tangents ? ValueAndGradient._canonicalize(x, x̄) : x̄
+        return y, canonical_tangents ? ValueAndGradient._canonicalize(x, x̄, backend) : x̄
     end
 end
 
@@ -46,7 +46,7 @@ function ValueAndGradient.value_and_pullback!!(
     if ad_cache !== nothing
         ∂xs = map(similar, xs)
         ReverseDiff.gradient!(∂xs, ad_cache, xs)
-        return y, canonical_tangents ? ValueAndGradient._canonicalize(xs, ∂xs) : ∂xs
+        return y, canonical_tangents ? ValueAndGradient._canonicalize(xs, ∂xs, backend) : ∂xs
     else
         x̄s = ntuple(N) do k
             ReverseDiff.gradient(
@@ -54,7 +54,7 @@ function ValueAndGradient.value_and_pullback!!(
                 xs[k],
             )
         end
-        return y, canonical_tangents ? ValueAndGradient._canonicalize(xs, x̄s) : x̄s
+        return y, canonical_tangents ? ValueAndGradient._canonicalize(xs, x̄s, backend) : x̄s
     end
 end
 

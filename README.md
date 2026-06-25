@@ -207,10 +207,10 @@ using ValueAndGradient: ValueAndGradient, DiffInput, DiffLeaf
 using ADTypes: AutoMyBackend
 
 function ValueAndGradient.value_and_pullback!!(
-        f::F, ȳ, ::AutoMyBackend, x::DiffInput;
+        f::F, ȳ, backend::AutoMyBackend, x::DiffInput;
         ad_cache=nothing, canonical_tangents=false, kwargs...) where {F}
     y, x̄ = my_vjp(f, ȳ, x)
-    return y, canonical_tangents ? ValueAndGradient._canonicalize(x, x̄) : x̄
+    return y, canonical_tangents ? ValueAndGradient._canonicalize(x, x̄, backend) : x̄
 end
 
 end

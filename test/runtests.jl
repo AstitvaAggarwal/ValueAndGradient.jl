@@ -587,7 +587,7 @@ end
     @testset "canonical_tangents: no positional constructor → warns, returns NamedTuple" begin
         x = NoCanonStruct()
         nt = (a = 1.0, b = 2.0)
-        result = @test_warn "cannot reconstruct" ValueAndGradient._canonicalize(x, nt)
+        result = @test_warn "cannot reconstruct" ValueAndGradient._canonicalize(x, nt, nothing)
         @test result === nt
     end
 

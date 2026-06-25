@@ -19,7 +19,7 @@ function ValueAndGradient.value_and_pullback!!(
     x̄s = back(ȳ)
     x̄ = Tracker.data(only(x̄s))
     return Tracker.data(y_tracked),
-    canonical_tangents ? ValueAndGradient._canonicalize(x, x̄) : x̄
+    canonical_tangents ? ValueAndGradient._canonicalize(x, x̄, backend) : x̄
 end
 
 function ValueAndGradient.value_and_pullback!!(
@@ -39,7 +39,7 @@ function ValueAndGradient.value_and_pullback!!(
     y_tracked, back = Tracker.forward(f, x1, x2, xrest...)
     x̄s = map(Tracker.data, back(ȳ))
     return Tracker.data(y_tracked),
-    canonical_tangents ? ValueAndGradient._canonicalize(xs, x̄s) : x̄s
+    canonical_tangents ? ValueAndGradient._canonicalize(xs, x̄s, backend) : x̄s
 end
 
 end

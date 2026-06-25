@@ -26,7 +26,7 @@ function ValueAndGradient.value_and_pullback!!(
     ∂x = zero(x)
     h = Enzyme.Const(xi -> _vdot(ȳ, f(xi)))
     Enzyme.autodiff(Enzyme.Reverse, h, Enzyme.Active, Enzyme.Duplicated(copy(x), ∂x))
-    return y, canonical_tangents ? ValueAndGradient._canonicalize(x, ∂x) : ∂x
+    return y, canonical_tangents ? ValueAndGradient._canonicalize(x, ∂x, backend) : ∂x
 end
 
 function ValueAndGradient.value_and_pullback!!(
@@ -48,7 +48,7 @@ function ValueAndGradient.value_and_pullback!!(
     h = Enzyme.Const((args...) -> _vdot(ȳ, f(args...)))
     dups = map((xi, ∂xi) -> Enzyme.Duplicated(copy(xi), ∂xi), xs, ∂xs)
     Enzyme.autodiff(Enzyme.Reverse, h, Enzyme.Active, dups...)
-    return y, canonical_tangents ? ValueAndGradient._canonicalize(xs, ∂xs) : ∂xs
+    return y, canonical_tangents ? ValueAndGradient._canonicalize(xs, ∂xs, backend) : ∂xs
 end
 
 # Forward mode: autodiff returns a 1-element result in Enzyme v0.13.
@@ -72,7 +72,7 @@ function ValueAndGradient.value_and_pushforward!!(
         Enzyme.Duplicated(copy(x), copy(ẋ)),
     )
     ẏ = result[1]
-    return y, canonical_tangents ? ValueAndGradient._canonicalize(y, ẏ) : ẏ
+    return y, canonical_tangents ? ValueAndGradient._canonicalize(y, ẏ, backend) : ẏ
 end
 
 function ValueAndGradient.value_and_pushforward!!(
@@ -93,7 +93,7 @@ function ValueAndGradient.value_and_pushforward!!(
     dups = map((xi, dxi) -> Enzyme.Duplicated(copy(xi), copy(dxi)), xs, ẋ)
     result = Enzyme.autodiff(Enzyme.Forward, f, Enzyme.Duplicated, dups...)
     ẏ = result[1]
-    return y, canonical_tangents ? ValueAndGradient._canonicalize(y, ẏ) : ẏ
+    return y, canonical_tangents ? ValueAndGradient._canonicalize(y, ẏ, backend) : ẏ
 end
 
 end

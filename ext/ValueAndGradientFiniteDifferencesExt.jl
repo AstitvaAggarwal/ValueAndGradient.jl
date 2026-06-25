@@ -20,10 +20,10 @@ function ValueAndGradient.value_and_pullback!!(
     x̄s = j′vp(fdm, f, ȳ, xs...)
     if length(xs) == 1
         x̄ = only(x̄s)
-        return y, canonical_tangents ? ValueAndGradient._canonicalize(only(xs), x̄) : x̄
+        return y, canonical_tangents ? ValueAndGradient._canonicalize(only(xs), x̄, backend) : x̄
     else
         t = Tuple(x̄s)
-        return y, canonical_tangents ? ValueAndGradient._canonicalize(xs, t) : t
+        return y, canonical_tangents ? ValueAndGradient._canonicalize(xs, t, backend) : t
     end
 end
 
@@ -46,7 +46,7 @@ function ValueAndGradient.value_and_pushforward!!(
     else
         ẏ = jvp(fdm, f, ntuple(i -> (xs[i], ẋ[i]), N)...)
     end
-    return y, canonical_tangents ? ValueAndGradient._canonicalize(y, ẏ) : ẏ
+    return y, canonical_tangents ? ValueAndGradient._canonicalize(y, ẏ, backend) : ẏ
 end
 
 end

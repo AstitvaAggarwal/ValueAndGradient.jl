@@ -30,7 +30,7 @@ function ValueAndGradient.value_and_pushforward!!(
             zero(Float64),
         )
     end
-    return y, canonical_tangents ? ValueAndGradient._canonicalize(y, ẏ) : ẏ
+    return y, canonical_tangents ? ValueAndGradient._canonicalize(y, ẏ, backend) : ẏ
 end
 
 end

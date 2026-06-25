@@ -30,20 +30,16 @@ Multiple arguments: `x̄` is a tuple of per-argument cotangents.
 Pass a backend-specific `ad_cache` to reuse it across repeated calls.
 If `nothing`, the backend builds one internally (convenience path — not efficient for loops).
 
-When `canonical_tangents=true`, known backend-specific wrapper types are normalised:
-- `nothing` (unused-argument tangent, e.g. from Zygote) → `zero(x)`
-- `Mooncake.Tangent{NT}` (Mooncake pushforward struct output) → `NT` NamedTuple of fields
-- Struct tangent `nt::NamedTuple` with primal `x::T` → tries `T(values(nt)...)`;
-  falls back to `nt` with a warning if `T` has no matching positional constructor.
-- All other tangent types → returned unchanged.
-Default `false` returns whatever the backend produces.
+When `canonical_tangents=true`, known backend-specific wrapper types are stripped before
+returning. `nothing` (Zygote's cotangent for unused arguments) becomes `zero(x)`.
+`Mooncake.Tangent` (struct output from Mooncake pushforward) is unwrapped to its fields
+NamedTuple, then reconstructed as `T(values(nt)...)` if `T` has a matching positional
+constructor — otherwise the NamedTuple is returned with a warning. Everything else passes
+through unchanged. Default `false` returns whatever the backend produces.
 
-Note: this does NOT guarantee a fully shared common output type across all backends.
-For `DiffLeaf` inputs with scalar/array outputs all backends agree. Known divergences:
-- Struct outputs in pushforward: only Mooncake normalises via `_mc_normalize`; other
-  forward-mode backends (e.g. Enzyme) return their own shadow type unchanged.
-- Derived pullback for forward-mode backends (`_pullback_via_pushforward`) allocates
-  `similar(x, real(eltype(x)))`, which strips the complex part for complex array inputs.
+For `DiffLeaf` inputs with scalar/array outputs all backends agree after normalisation.
+Two known gaps: other forward-mode backends (e.g. Enzyme) don't normalise struct tangents,
+and the derived pullback for forward-mode backends gives real tangents for complex inputs.
 """
 function value_and_pullback!! end
 
@@ -88,9 +84,10 @@ _zero_like(x::Number) = zero(real(x))
 _zero_like(x::AbstractArray) = zero(x)
 _zero_like(x::Tuple) = map(_zero_like, x)
 
-_canonicalize(x, ::Nothing) = _zero_like(x)
-_canonicalize(x::DiffLeaf, t::DiffLeaf) = t
-_canonicalize(xs::Tuple, ts::Tuple) = map(_canonicalize, xs, ts)
+_canonicalize(x, ::Nothing, backend) = _zero_like(x)
+_canonicalize(x::DiffLeaf, t::DiffLeaf, backend) = t
+_canonicalize(xs::Tuple, ts::Tuple, backend) =
+    map((x, t) -> _canonicalize(x, t, backend), xs, ts)
 # TODO: ChainRulesCore.NoTangent and ZeroTangent are not mapped to zero(x) here.
 # For all 9 current backends this is a non-issue:
 #   - Zygote converts AbstractZero → nothing via wrap_chainrules_output before returning,
@@ -99,12 +96,12 @@ _canonicalize(xs::Tuple, ts::Tuple) = map(_canonicalize, xs, ts)
 # A future backend that surfaces ChainRulesCore types directly to the caller would hit this.
 # Fix if that arises: add
 #   using ChainRulesCore: NoTangent, ZeroTangent
-#   _canonicalize(x, ::Union{NoTangent,ZeroTangent}) = _zero_like(x)
-# TODO: struct outputs in pushforward — only Mooncake normalises struct tangents via
-# _mc_normalize (Mooncake.Tangent → NamedTuple → struct). Other forward-mode backends
-# (e.g. Enzyme) return their own shadow type for struct outputs; `t isa NamedTuple`
-# is false so it falls through and the backend-specific shadow type leaks to the caller.
-function _canonicalize(x::T, t) where {T}
+#   _canonicalize(x, ::Union{NoTangent,ZeroTangent}, backend) = _zero_like(x)
+# TODO: struct outputs in pushforward — Mooncake normalises via its _canonicalize overload
+# (Mooncake.Tangent → NamedTuple → struct). Other forward-mode backends (e.g. Enzyme)
+# return their own shadow type for struct outputs; add a backend-specific overload here
+# once Enzyme's exact shadow type for struct-returning f is confirmed.
+function _canonicalize(x::T, t, backend) where {T}
     t isa NamedTuple || return t
     try
         return T(values(t)...)
