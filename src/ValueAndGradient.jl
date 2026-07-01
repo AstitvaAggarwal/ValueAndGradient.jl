@@ -20,7 +20,7 @@ a single `DiffLeaf` (scalar or array), or a `Tuple` of `DiffLeaf`s for multi-inp
 const DiffInput = Union{DiffLeaf,Tuple{Vararg{DiffLeaf}}}
 
 """
-    value_and_pullback!!(f, ȳ, backend, x...; ad_cache=nothing, canonical_tangents=false) -> (y, x̄)
+    value_and_pullback!!(f, ȳ, backend, x...; ad_cache=nothing, normalise_tangents=false) -> (y, x̄)
 
 Returns `y = f(x...)` and the VJP `x̄ = (∂f/∂x)ᵀ ȳ`.
 `ȳ` must match the output type of `f`: scalar, array, or tuple thereof.
@@ -30,7 +30,7 @@ Multiple arguments: `x̄` is a tuple of per-argument cotangents.
 Pass a backend-specific `ad_cache` to reuse it across repeated calls.
 If `nothing`, the backend builds one internally (convenience path — not efficient for loops).
 
-When `canonical_tangents=true`, known backend-specific wrapper types are stripped before
+When `normalise_tangents=true`, known backend-specific wrapper types are stripped before
 returning. `nothing` (Zygote's cotangent for unused arguments) becomes `zero(x)`.
 `Mooncake.Tangent` (struct output from Mooncake pushforward) is unwrapped to its fields
 NamedTuple, then reconstructed as `T(values(nt)...)` if `T` has a matching positional
@@ -44,14 +44,14 @@ and the derived pullback for forward-mode backends gives real tangents for compl
 function value_and_pullback!! end
 
 """
-    value_and_pushforward!!(f, ẋ, backend, x...; ad_cache=nothing, canonical_tangents=false) -> (y, ẏ)
+    value_and_pushforward!!(f, ẋ, backend, x...; ad_cache=nothing, normalise_tangents=false) -> (y, ẏ)
 
 Returns `y = f(x...)` and the JVP `ẏ = ∂f/∂x * ẋ`.
 `ẏ` matches the output type of `f`: scalar, array, or tuple thereof.
 Single argument: `ẋ` has the same structure as `x`.
 Multiple arguments: `ẋ` is a tuple of per-argument tangents.
 
-See `value_and_pullback!!` for `ad_cache` and `canonical_tangents` semantics.
+See `value_and_pullback!!` for `ad_cache` and `normalise_tangents` semantics.
 """
 function value_and_pushforward!! end
 
@@ -79,15 +79,15 @@ _vdot(a::AbstractArray, b::AbstractArray) =
 _vdot(a::Tuple, b::Tuple) = sum(_vdot(ai, bi) for (ai, bi) in zip(a, b))
 _vdot(a::NamedTuple{K}, b::NamedTuple{K}) where {K} = sum(_vdot(a[k], b[k]) for k in K)
 
-# Canonical tangent normalization (called by extension methods when canonical_tangents=true).
+# Tangent normalisation (called by extension methods when normalise_tangents=true).
 _zero_like(x::Number) = zero(real(x))
 _zero_like(x::AbstractArray) = zero(x)
 _zero_like(x::Tuple) = map(_zero_like, x)
 
-_canonicalize(x, ::Nothing, backend) = _zero_like(x)
-_canonicalize(x::DiffLeaf, t::DiffLeaf, backend) = t
-_canonicalize(xs::Tuple, ts::Tuple, backend) =
-    map((x, t) -> _canonicalize(x, t, backend), xs, ts)
+_normalise(x, ::Nothing, backend) = _zero_like(x)
+_normalise(x::DiffLeaf, t::DiffLeaf, backend) = t
+_normalise(xs::Tuple, ts::Tuple, backend) =
+    map((x, t) -> _normalise(x, t, backend), xs, ts)
 # TODO: ChainRulesCore.NoTangent and ZeroTangent are not mapped to zero(x) here.
 # For all 9 current backends this is a non-issue:
 #   - Zygote converts AbstractZero → nothing via wrap_chainrules_output before returning,
@@ -96,17 +96,17 @@ _canonicalize(xs::Tuple, ts::Tuple, backend) =
 # A future backend that surfaces ChainRulesCore types directly to the caller would hit this.
 # Fix if that arises: add
 #   using ChainRulesCore: NoTangent, ZeroTangent
-#   _canonicalize(x, ::Union{NoTangent,ZeroTangent}, backend) = _zero_like(x)
-# TODO: struct outputs in pushforward — Mooncake normalises via its _canonicalize overload
+#   _normalise(x, ::Union{NoTangent,ZeroTangent}, backend) = _zero_like(x)
+# TODO: struct outputs in pushforward — Mooncake normalises via its _normalise overload
 # (Mooncake.Tangent → NamedTuple → struct). Other forward-mode backends (e.g. Enzyme)
 # return their own shadow type for struct outputs; add a backend-specific overload here
 # once Enzyme's exact shadow type for struct-returning f is confirmed.
-function _canonicalize(x::T, t, backend) where {T}
+function _normalise(x::T, t, backend) where {T}
     t isa NamedTuple || return t
     try
         return T(values(t)...)
     catch
-        @warn "canonical_tangents=true: cannot reconstruct $(T) from tangent NamedTuple; " *
+        @warn "normalise_tangents=true: cannot reconstruct $(T) from tangent NamedTuple; " *
               "returning tangent as-is. Define a positional constructor for $(T) to enable reconstruction."
         return t
     end
@@ -254,6 +254,50 @@ function value_and_pushforward!!(f, ẋ, backend::AbstractADType, xs...; kwargs.
         )
     end
 end
+
+# TODO: current_backend() / isderiving() — backend-awareness for differentiated code
+#
+# MOTIVATION
+# Mooncake runs the primal with plain, untagged types. A function f being differentiated
+# by Mooncake has no way to detect this (unlike Zygote/Tracker/ReverseDiff whose tagged
+# inputs are visible via isa TrackedArray / isa Dual). This creates a gap: backend-aware
+# dispatch inside f (e.g. "use a cuDNN kernel only when not differentiating") is
+# impossible with Mooncake but trivial with other backends. VG.jl sits above all backends
+# and can bridge this gap uniformly.
+#
+# PROPOSAL
+#   current_backend() -> Union{AbstractADType, Nothing}
+#     Returns the AD backend currently computing a derivative, or nothing if called
+#     outside value_and_pullback!! / value_and_pushforward!!.
+#
+#   isderiving() -> Bool
+#     Returns true if called inside value_and_pullback!! or value_and_pushforward!!.
+#
+# IMPLEMENTATION
+#   const _BACKEND_CTX_KEY = :__ValueAndGradient_current_backend__
+#   current_backend() = get(task_local_storage(), _BACKEND_CTX_KEY, nothing)
+#   isderiving() = current_backend() !== nothing
+#
+#   Each extension wraps its implementation in:
+#     task_local_storage(_BACKEND_CTX_KEY, backend)
+#     try
+#         <existing body>
+#     finally
+#         delete!(task_local_storage(), _BACKEND_CTX_KEY)
+#     end
+#   The try/finally is required: without it, a thrown exception inside f would leave
+#   a stale backend in storage, making subsequent isderiving() calls return true spuriously.
+#   task_local_storage is per-Task so parallel AD calls in different tasks are independent.
+#
+# USE CASES
+#   1. Mooncake gap: any library that currently special-cases Zygote/Tracker via isa checks
+#      can use VG.current_backend() instead — works uniformly including Mooncake.
+#   2. SciMLBase.ADOriginator replacement: SciMLBase threads an originator::ADOriginator
+#      field through 20+ function signatures solely to propagate which backend is running.
+#      VG.current_backend() provides the same information as a zero-argument query, removing
+#      the need for that plumbing (verified: SciMLBase.jl lines 718–761).
+#   3. User libraries: e.g. "skip expensive logging when inside AD", "switch to a
+#      mathematically equivalent but AD-friendlier code path for Mooncake specifically".
 
 export value_and_pullback!!, value_and_pushforward!!, test_pullback, test_pushforward
 

@@ -28,8 +28,8 @@ y, ẏ = value_and_pushforward!!(f, ones(3), AutoMooncakeForward(config=nothing)
 Both functions have the same signature shape:
 
 ```julia
-value_and_pullback!!(f, ȳ, backend, x...; ad_cache=nothing, canonical_tangents=false)
-value_and_pushforward!!(f, ẋ, backend, x...; ad_cache=nothing, canonical_tangents=false)
+value_and_pullback!!(f, ȳ, backend, x...; ad_cache=nothing, normalise_tangents=false)
+value_and_pushforward!!(f, ẋ, backend, x...; ad_cache=nothing, normalise_tangents=false)
 ```
 
 `ȳ` must match the output type of `f`. For array outputs, pass an array of the same shape; for scalar outputs, pass a scalar. Multi-argument functions return a tuple of per-argument tangents:
@@ -80,9 +80,9 @@ y, x̄ = value_and_pullback!!(f, 1.0, AutoFiniteDiff(), x; ad_cache=cache)
 
 Stateless backends (Zygote, FiniteDifferences, Tracker, ForwardDiff, Enzyme) ignore `ad_cache` with a warning.
 
-## Canonical tangents
+## Tangent normalisation
 
-Different backends return different types for what is conceptually "zero gradient" or "struct gradient". Setting `canonical_tangents=true` normalises the known cases — it is not a guarantee of a fully shared common type across all backends, but for `DiffLeaf` inputs with scalar/array outputs all backends agree after normalisation:
+Different backends return different types for what is conceptually "zero gradient" or "struct gradient". Setting `normalise_tangents=true` normalises the known cases — it is not a guarantee of a fully shared common type across all backends, but for `DiffLeaf` inputs with scalar/array outputs all backends agree after normalisation:
 
 | Raw tangent | Normalised to |
 |---|---|
@@ -93,13 +93,13 @@ Different backends return different types for what is conceptually "zero gradien
 ```julia
 # Zygote returns nothing for y since f doesn't use it
 f = (x, y) -> sum(x .^ 2)
-_, x̄s = value_and_pullback!!(f, 1.0, AutoZygote(), x, y; canonical_tangents=true)
+_, x̄s = value_and_pullback!!(f, 1.0, AutoZygote(), x, y; normalise_tangents=true)
 # x̄s[2] == zero(y)  instead of nothing
 
 # Mooncake pushforward: struct output comes back as a reconstructed struct
 struct MyPair{T}; a::T; b::T; end
 f = x -> MyPair(sum(x .^ 2), x[1] + x[2])
-_, ẏ = value_and_pushforward!!(f, ones(3), AutoMooncakeForward(config=nothing), x; canonical_tangents=true)
+_, ẏ = value_and_pushforward!!(f, ones(3), AutoMooncakeForward(config=nothing), x; normalise_tangents=true)
 # ẏ isa MyPair{Float64}
 ```
 
@@ -197,7 +197,7 @@ julia --project=examples/ examples/linear_solve.jl
 
 ## Adding a new backend
 
-Implement whichever of the two operations your backend supports natively — VG.jl will derive the other automatically. Register the extension in `Project.toml` and call `_canonicalize` at each return site if you want `canonical_tangents` support:
+Implement whichever of the two operations your backend supports natively — VG.jl will derive the other automatically. Register the extension in `Project.toml` and call `_normalise` at each return site if you want `normalise_tangents` support:
 
 ```julia
 # ext/ValueAndGradientMyBackendExt.jl
@@ -208,9 +208,9 @@ using ADTypes: AutoMyBackend
 
 function ValueAndGradient.value_and_pullback!!(
         f::F, ȳ, backend::AutoMyBackend, x::DiffInput;
-        ad_cache=nothing, canonical_tangents=false, kwargs...) where {F}
+        ad_cache=nothing, normalise_tangents=false, kwargs...) where {F}
     y, x̄ = my_vjp(f, ȳ, x)
-    return y, canonical_tangents ? ValueAndGradient._canonicalize(x, x̄, backend) : x̄
+    return y, normalise_tangents ? ValueAndGradient._normalise(x, x̄, backend) : x̄
 end
 
 end

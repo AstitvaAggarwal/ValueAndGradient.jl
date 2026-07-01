@@ -550,44 +550,44 @@ end
         end
     end
 
-    # ---- canonical_tangents ----
+    # ---- normalise_tangents ----
 
-    @testset "canonical_tangents: nothing → zero (Zygote multi-arg)" begin
+    @testset "normalise_tangents: nothing → zero (Zygote multi-arg)" begin
         # f ignores y → Zygote returns nothing for ȳ
         f = (x, y) -> sum(x .^ 2)
         x = Float64[1.0, 2.0]
         y = Float64[3.0, 4.0]
-        _, x̄s = value_and_pullback!!(f, 1.0, AutoZygote(), x, y; canonical_tangents = true)
+        _, x̄s = value_and_pullback!!(f, 1.0, AutoZygote(), x, y; normalise_tangents = true)
         @test x̄s[1] ≈ 2 .* x
         @test x̄s[2] ≈ zero(y)
     end
 
-    @testset "canonical_tangents: Mooncake.Tangent → reconstructed struct (Mooncake pushforward)" begin
+    @testset "normalise_tangents: Mooncake.Tangent → reconstructed struct (Mooncake pushforward)" begin
         f = x -> VGOutput(sum(x .^ 2), x[1] + x[2])
         x = Float64[1.0, 2.0, 3.0]
         ẋ = ones(Float64, 3)
         backend = AutoMooncakeForward(config = nothing)
         y_raw, ẏ_raw = value_and_pushforward!!(f, ẋ, backend, x)
         @test ẏ_raw isa Mooncake.Tangent  # default: raw Mooncake.Tangent
-        y2, ẏ2 = value_and_pushforward!!(f, ẋ, backend, x; canonical_tangents = true)
-        @test ẏ2 isa VGOutput{Float64}    # canonical: reconstructed struct
+        y2, ẏ2 = value_and_pushforward!!(f, ẋ, backend, x; normalise_tangents = true)
+        @test ẏ2 isa VGOutput{Float64}    # normalised: reconstructed struct
         @test ẏ2.a ≈ sum(2 .* x .* ẋ)
         @test ẏ2.b ≈ 2.0
     end
 
-    @testset "canonical_tangents: DiffLeaf tangent unchanged (AutoFiniteDifferences)" begin
+    @testset "normalise_tangents: DiffLeaf tangent unchanged (AutoFiniteDifferences)" begin
         f = x -> sum(x .^ 2)
         x = Float64[1.0, 2.0, 3.0]
         backend = AutoFiniteDifferences(fdm = central_fdm(5, 1))
-        _, x̄_false = value_and_pullback!!(f, 1.0, backend, x; canonical_tangents = false)
-        _, x̄_true = value_and_pullback!!(f, 1.0, backend, x; canonical_tangents = true)
+        _, x̄_false = value_and_pullback!!(f, 1.0, backend, x; normalise_tangents = false)
+        _, x̄_true = value_and_pullback!!(f, 1.0, backend, x; normalise_tangents = true)
         @test x̄_false ≈ x̄_true
     end
 
-    @testset "canonical_tangents: no positional constructor → warns, returns NamedTuple" begin
+    @testset "normalise_tangents: no positional constructor → warns, returns NamedTuple" begin
         x = NoCanonStruct()
         nt = (a = 1.0, b = 2.0)
-        result = @test_warn "cannot reconstruct" ValueAndGradient._canonicalize(x, nt, nothing)
+        result = @test_warn "cannot reconstruct" ValueAndGradient._normalise(x, nt, nothing)
         @test result === nt
     end
 

@@ -15,17 +15,17 @@ function ValueAndGradient.value_and_pullback!!(
     backend::AutoReverseDiff,
     x::AbstractArray;
     ad_cache = nothing,
-    canonical_tangents = false,
+    normalise_tangents = false,
     kwargs...,
 ) where {F}
     y = f(x)
     if ad_cache !== nothing
         ∂x = similar(x)
         ReverseDiff.gradient!(∂x, ad_cache, x)
-        return y, canonical_tangents ? ValueAndGradient._canonicalize(x, ∂x, backend) : ∂x
+        return y, normalise_tangents ? ValueAndGradient._normalise(x, ∂x, backend) : ∂x
     else
         x̄ = ReverseDiff.gradient(xi -> _vdot(ȳ, f(xi)), x)
-        return y, canonical_tangents ? ValueAndGradient._canonicalize(x, x̄, backend) : x̄
+        return y, normalise_tangents ? ValueAndGradient._normalise(x, x̄, backend) : x̄
     end
 end
 
@@ -37,7 +37,7 @@ function ValueAndGradient.value_and_pullback!!(
     x2::AbstractArray,
     xrest::AbstractArray...;
     ad_cache = nothing,
-    canonical_tangents = false,
+    normalise_tangents = false,
     kwargs...,
 ) where {F}
     xs = (x1, x2, xrest...)
@@ -46,7 +46,7 @@ function ValueAndGradient.value_and_pullback!!(
     if ad_cache !== nothing
         ∂xs = map(similar, xs)
         ReverseDiff.gradient!(∂xs, ad_cache, xs)
-        return y, canonical_tangents ? ValueAndGradient._canonicalize(xs, ∂xs, backend) : ∂xs
+        return y, normalise_tangents ? ValueAndGradient._normalise(xs, ∂xs, backend) : ∂xs
     else
         x̄s = ntuple(N) do k
             ReverseDiff.gradient(
@@ -54,7 +54,7 @@ function ValueAndGradient.value_and_pullback!!(
                 xs[k],
             )
         end
-        return y, canonical_tangents ? ValueAndGradient._canonicalize(xs, x̄s, backend) : x̄s
+        return y, normalise_tangents ? ValueAndGradient._normalise(xs, x̄s, backend) : x̄s
     end
 end
 

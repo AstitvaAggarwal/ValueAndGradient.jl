@@ -10,7 +10,7 @@ function ValueAndGradient.value_and_pullback!!(
     backend::AutoTracker,
     x::AbstractArray;
     ad_cache = nothing,
-    canonical_tangents = false,
+    normalise_tangents = false,
     kwargs...,
 ) where {F}
     ad_cache !== nothing &&
@@ -19,7 +19,7 @@ function ValueAndGradient.value_and_pullback!!(
     x̄s = back(ȳ)
     x̄ = Tracker.data(only(x̄s))
     return Tracker.data(y_tracked),
-    canonical_tangents ? ValueAndGradient._canonicalize(x, x̄, backend) : x̄
+    normalise_tangents ? ValueAndGradient._normalise(x, x̄, backend) : x̄
 end
 
 function ValueAndGradient.value_and_pullback!!(
@@ -30,7 +30,7 @@ function ValueAndGradient.value_and_pullback!!(
     x2::AbstractArray,
     xrest::AbstractArray...;
     ad_cache = nothing,
-    canonical_tangents = false,
+    normalise_tangents = false,
     kwargs...,
 ) where {F}
     ad_cache !== nothing &&
@@ -39,7 +39,7 @@ function ValueAndGradient.value_and_pullback!!(
     y_tracked, back = Tracker.forward(f, x1, x2, xrest...)
     x̄s = map(Tracker.data, back(ȳ))
     return Tracker.data(y_tracked),
-    canonical_tangents ? ValueAndGradient._canonicalize(xs, x̄s, backend) : x̄s
+    normalise_tangents ? ValueAndGradient._normalise(xs, x̄s, backend) : x̄s
 end
 
 end

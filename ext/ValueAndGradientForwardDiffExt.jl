@@ -14,7 +14,7 @@ function ValueAndGradient.value_and_pushforward!!(
     backend::AutoForwardDiff,
     xs...;
     ad_cache = nothing,
-    canonical_tangents = false,
+    normalise_tangents = false,
     kwargs...,
 ) where {F}
     ad_cache !== nothing &&
@@ -30,7 +30,7 @@ function ValueAndGradient.value_and_pushforward!!(
             zero(Float64),
         )
     end
-    return y, canonical_tangents ? ValueAndGradient._canonicalize(y, ẏ, backend) : ẏ
+    return y, normalise_tangents ? ValueAndGradient._normalise(y, ẏ, backend) : ẏ
 end
 
 end
