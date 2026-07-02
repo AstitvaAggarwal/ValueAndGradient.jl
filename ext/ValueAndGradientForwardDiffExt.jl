@@ -15,6 +15,7 @@ function ValueAndGradient.value_and_pushforward!!(
     xs...;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pushforward = nothing,
     kwargs...,
 ) where {F}
     ad_cache !== nothing &&
@@ -30,7 +31,8 @@ function ValueAndGradient.value_and_pushforward!!(
             zero(Float64),
         )
     end
-    return y, normalise_tangents ? ValueAndGradient._normalise(y, ẏ, backend) : ẏ
+    return y,
+    ValueAndGradient._apply_norm(y, ẏ, backend, normalise_tangents, normalise_pushforward)
 end
 
 end

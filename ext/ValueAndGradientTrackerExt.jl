@@ -11,6 +11,7 @@ function ValueAndGradient.value_and_pullback!!(
     x::AbstractArray;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pullback = nothing,
     kwargs...,
 ) where {F}
     ad_cache !== nothing &&
@@ -19,7 +20,7 @@ function ValueAndGradient.value_and_pullback!!(
     x̄s = back(ȳ)
     x̄ = Tracker.data(only(x̄s))
     return Tracker.data(y_tracked),
-    normalise_tangents ? ValueAndGradient._normalise(x, x̄, backend) : x̄
+    ValueAndGradient._apply_norm(x, x̄, backend, normalise_tangents, normalise_pullback)
 end
 
 function ValueAndGradient.value_and_pullback!!(
@@ -31,6 +32,7 @@ function ValueAndGradient.value_and_pullback!!(
     xrest::AbstractArray...;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pullback = nothing,
     kwargs...,
 ) where {F}
     ad_cache !== nothing &&
@@ -39,7 +41,7 @@ function ValueAndGradient.value_and_pullback!!(
     y_tracked, back = Tracker.forward(f, x1, x2, xrest...)
     x̄s = map(Tracker.data, back(ȳ))
     return Tracker.data(y_tracked),
-    normalise_tangents ? ValueAndGradient._normalise(xs, x̄s, backend) : x̄s
+    ValueAndGradient._apply_norm(xs, x̄s, backend, normalise_tangents, normalise_pullback)
 end
 
 end

@@ -14,8 +14,11 @@ function _deriv_cache(f, xs...; config::Union{Config,Nothing})
     return Mooncake.prepare_derivative_cache(f, xs...; config)
 end
 
-ValueAndGradient._normalise(x, t::Mooncake.Tangent, ::Union{AutoMooncake,AutoMooncakeForward}) =
-    ValueAndGradient._normalise(x, t.fields, nothing)
+ValueAndGradient._normalise(
+    x,
+    t::Mooncake.Tangent,
+    ::Union{AutoMooncake,AutoMooncakeForward},
+) = ValueAndGradient._normalise(x, t.fields, nothing)
 
 function ValueAndGradient.value_and_pullback!!(
     f::F,
@@ -24,10 +27,12 @@ function ValueAndGradient.value_and_pullback!!(
     x::DiffInput;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pullback = nothing,
 ) where {F}
     c = ad_cache !== nothing ? ad_cache : _pb_cache(f, x; config = backend.config)
     y, (_, x̄) = Mooncake.value_and_pullback!!(c, ȳ, f, x)
-    return y, normalise_tangents ? ValueAndGradient._normalise(x, x̄, backend) : x̄
+    return y,
+    ValueAndGradient._apply_norm(x, x̄, backend, normalise_tangents, normalise_pullback)
 end
 
 function ValueAndGradient.value_and_pullback!!(
@@ -39,13 +44,20 @@ function ValueAndGradient.value_and_pullback!!(
     xrest::DiffInput...;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pullback = nothing,
 ) where {F}
     c =
         ad_cache !== nothing ? ad_cache :
         _pb_cache(f, x1, x2, xrest...; config = backend.config)
     y, (_, x̄s...) = Mooncake.value_and_pullback!!(c, ȳ, f, x1, x2, xrest...)
     return y,
-    normalise_tangents ? ValueAndGradient._normalise((x1, x2, xrest...), x̄s, backend) : x̄s
+    ValueAndGradient._apply_norm(
+        (x1, x2, xrest...),
+        x̄s,
+        backend,
+        normalise_tangents,
+        normalise_pullback,
+    )
 end
 
 function ValueAndGradient.value_and_pushforward!!(
@@ -55,11 +67,13 @@ function ValueAndGradient.value_and_pushforward!!(
     x::DiffInput;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pushforward = nothing,
 ) where {F}
     c = ad_cache !== nothing ? ad_cache : _deriv_cache(f, x; config = backend.config)
     df = Mooncake.zero_tangent(f)
     y, ẏ = Mooncake.value_and_derivative!!(c, (f, df), (x, ẋ))
-    return y, normalise_tangents ? ValueAndGradient._normalise(y, ẏ, backend) : ẏ
+    return y,
+    ValueAndGradient._apply_norm(y, ẏ, backend, normalise_tangents, normalise_pushforward)
 end
 
 function ValueAndGradient.value_and_pushforward!!(
@@ -71,6 +85,7 @@ function ValueAndGradient.value_and_pushforward!!(
     xrest::DiffInput...;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pushforward = nothing,
 ) where {F}
     c =
         ad_cache !== nothing ? ad_cache :
@@ -78,7 +93,8 @@ function ValueAndGradient.value_and_pushforward!!(
     df = Mooncake.zero_tangent(f)
     pairs = map((xi, ẋi) -> (xi, ẋi), (x1, x2, xrest...), ẋ)
     y, ẏ = Mooncake.value_and_derivative!!(c, (f, df), pairs...)
-    return y, normalise_tangents ? ValueAndGradient._normalise(y, ẏ, backend) : ẏ
+    return y,
+    ValueAndGradient._apply_norm(y, ẏ, backend, normalise_tangents, normalise_pushforward)
 end
 
 end

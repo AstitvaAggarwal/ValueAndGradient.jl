@@ -16,16 +16,25 @@ function ValueAndGradient.value_and_pullback!!(
     x::AbstractArray;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pullback = nothing,
     kwargs...,
 ) where {F}
     y = f(x)
     if ad_cache !== nothing
         ∂x = similar(x)
         ReverseDiff.gradient!(∂x, ad_cache, x)
-        return y, normalise_tangents ? ValueAndGradient._normalise(x, ∂x, backend) : ∂x
+        return y,
+        ValueAndGradient._apply_norm(
+            x,
+            ∂x,
+            backend,
+            normalise_tangents,
+            normalise_pullback,
+        )
     else
         x̄ = ReverseDiff.gradient(xi -> _vdot(ȳ, f(xi)), x)
-        return y, normalise_tangents ? ValueAndGradient._normalise(x, x̄, backend) : x̄
+        return y,
+        ValueAndGradient._apply_norm(x, x̄, backend, normalise_tangents, normalise_pullback)
     end
 end
 
@@ -38,6 +47,7 @@ function ValueAndGradient.value_and_pullback!!(
     xrest::AbstractArray...;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pullback = nothing,
     kwargs...,
 ) where {F}
     xs = (x1, x2, xrest...)
@@ -46,7 +56,14 @@ function ValueAndGradient.value_and_pullback!!(
     if ad_cache !== nothing
         ∂xs = map(similar, xs)
         ReverseDiff.gradient!(∂xs, ad_cache, xs)
-        return y, normalise_tangents ? ValueAndGradient._normalise(xs, ∂xs, backend) : ∂xs
+        return y,
+        ValueAndGradient._apply_norm(
+            xs,
+            ∂xs,
+            backend,
+            normalise_tangents,
+            normalise_pullback,
+        )
     else
         x̄s = ntuple(N) do k
             ReverseDiff.gradient(
@@ -54,7 +71,14 @@ function ValueAndGradient.value_and_pullback!!(
                 xs[k],
             )
         end
-        return y, normalise_tangents ? ValueAndGradient._normalise(xs, x̄s, backend) : x̄s
+        return y,
+        ValueAndGradient._apply_norm(
+            xs,
+            x̄s,
+            backend,
+            normalise_tangents,
+            normalise_pullback,
+        )
     end
 end
 

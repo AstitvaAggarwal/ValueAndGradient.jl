@@ -11,6 +11,7 @@ function ValueAndGradient.value_and_pullback!!(
     xs...;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pullback = nothing,
     kwargs...,
 ) where {F}
     ad_cache !== nothing &&
@@ -20,10 +21,24 @@ function ValueAndGradient.value_and_pullback!!(
     x̄s = j′vp(fdm, f, ȳ, xs...)
     if length(xs) == 1
         x̄ = only(x̄s)
-        return y, normalise_tangents ? ValueAndGradient._normalise(only(xs), x̄, backend) : x̄
+        return y,
+        ValueAndGradient._apply_norm(
+            only(xs),
+            x̄,
+            backend,
+            normalise_tangents,
+            normalise_pullback,
+        )
     else
         t = Tuple(x̄s)
-        return y, normalise_tangents ? ValueAndGradient._normalise(xs, t, backend) : t
+        return y,
+        ValueAndGradient._apply_norm(
+            xs,
+            t,
+            backend,
+            normalise_tangents,
+            normalise_pullback,
+        )
     end
 end
 
@@ -34,6 +49,7 @@ function ValueAndGradient.value_and_pushforward!!(
     xs...;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pushforward = nothing,
     kwargs...,
 ) where {F}
     ad_cache !== nothing &&
@@ -46,7 +62,8 @@ function ValueAndGradient.value_and_pushforward!!(
     else
         ẏ = jvp(fdm, f, ntuple(i -> (xs[i], ẋ[i]), N)...)
     end
-    return y, normalise_tangents ? ValueAndGradient._normalise(y, ẏ, backend) : ẏ
+    return y,
+    ValueAndGradient._apply_norm(y, ẏ, backend, normalise_tangents, normalise_pushforward)
 end
 
 end

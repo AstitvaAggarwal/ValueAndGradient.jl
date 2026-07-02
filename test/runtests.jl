@@ -587,8 +587,56 @@ end
     @testset "normalise_tangents: no positional constructor → warns, returns NamedTuple" begin
         x = NoCanonStruct()
         nt = (a = 1.0, b = 2.0)
-        result = @test_warn "cannot reconstruct" ValueAndGradient._normalise(x, nt, nothing)
+        result =
+            @test_warn "cannot auto-reconstruct" ValueAndGradient._normalise(x, nt, nothing)
         @test result === nt
+    end
+
+    # ---- normalise_pullback / normalise_pushforward ----
+
+    @testset "normalise_pushforward: overrides normalise_tangents" begin
+        f = x -> VGOutput(sum(x .^ 2), x[1] + x[2])
+        x = Float64[1.0, 2.0, 3.0]
+        ẋ = ones(Float64, 3)
+        backend = AutoMooncakeForward(config = nothing)
+        sentinel = Ref(false)
+        nf = t -> (sentinel[] = true; VGOutput(Float64(42), Float64(99)))
+        _, ẏ = value_and_pushforward!!(
+            f,
+            ẋ,
+            backend,
+            x;
+            normalise_tangents = true,
+            normalise_pushforward = nf,
+        )
+        @test sentinel[]
+        @test ẏ == VGOutput(Float64(42), Float64(99))
+    end
+
+    @testset "normalise_pushforward: handles type with no positional constructor" begin
+        f = x -> NoCanonStruct()
+        x = Float64[1.0]
+        ẋ = Float64[1.0]
+        backend = AutoMooncakeForward(config = nothing)
+        _, ẏ = value_and_pushforward!!(
+            f,
+            ẋ,
+            backend,
+            x;
+            normalise_pushforward = t -> NoCanonStruct(),
+        )
+        @test ẏ isa NoCanonStruct
+    end
+
+    @testset "normalise_pullback: custom conversion on Zygote nothing cotangent" begin
+        f = (x, y) -> sum(x .^ 2)
+        x = Float64[1.0, 2.0]
+        y = Float64[3.0, 4.0]
+        # Zygote returns nothing for unused y; replace with a sentinel value instead of zero
+        nf = cotangent -> map(ti -> ti === nothing ? fill(-1.0, 2) : ti, cotangent)
+        _, x̄s = value_and_pullback!!(f, 1.0, AutoZygote(), x, y; normalise_pullback = nf)
+        @test x̄s[1] ≈ 2 .* x
+        @test x̄s[2] ≈ fill(-1.0, 2)
     end
 
     # ---- AutoEnzyme (both ops, AbstractArray only) ----

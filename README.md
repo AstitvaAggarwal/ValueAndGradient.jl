@@ -28,8 +28,8 @@ y, ẏ = value_and_pushforward!!(f, ones(3), AutoMooncakeForward(config=nothing)
 Both functions have the same signature shape:
 
 ```julia
-value_and_pullback!!(f, ȳ, backend, x...; ad_cache=nothing, normalise_tangents=false)
-value_and_pushforward!!(f, ẋ, backend, x...; ad_cache=nothing, normalise_tangents=false)
+value_and_pullback!!(f, ȳ, backend, x...; ad_cache=nothing, normalise_tangents=false, normalise_pullback=nothing)
+value_and_pushforward!!(f, ẋ, backend, x...; ad_cache=nothing, normalise_tangents=false, normalise_pushforward=nothing)
 ```
 
 `ȳ` must match the output type of `f`. For array outputs, pass an array of the same shape; for scalar outputs, pass a scalar. Multi-argument functions return a tuple of per-argument tangents:
@@ -39,7 +39,7 @@ g = (x, y) -> sum(x .* y)
 val, (x̄, ȳ) = value_and_pullback!!(g, 1.0, AutoMooncake(config=nothing), [1.0, 2.0], [3.0, 4.0])
 ```
 
-Tuple and NamedTuple outputs work too — pass a matching `ȳ`:
+Tuple and NamedTuple outputs work too, pass a matching `ȳ`:
 
 ```julia
 f = x -> (a = sum(x .^ 2), b = x[1] + x[2])
@@ -56,7 +56,7 @@ DiffArray  = AbstractArray{<:DiffScalar}
 DiffLeaf   = Union{DiffScalar, DiffArray}
 ```
 
-There's no constraint on output types — structs, tuples, NamedTuples, arrays, scalars all pass through in principle. In practice, support depends on the backend; if something doesn't work, please open a PR.
+There's no constraint on output types: structs, tuples, NamedTuples, arrays, scalars all pass through in principle. In practice, support depends on the backend; if something doesn't work, please open a PR.
 
 ## Caching
 
@@ -82,28 +82,46 @@ Stateless backends (Zygote, FiniteDifferences, Tracker, ForwardDiff, Enzyme) ign
 
 ## Tangent normalisation
 
-Different backends return different types for what is conceptually "zero gradient" or "struct gradient". Setting `normalise_tangents=true` normalises the known cases — it is not a guarantee of a fully shared common type across all backends, but for `DiffLeaf` inputs with scalar/array outputs all backends agree after normalisation:
+By default you get the raw tangent or cotangent from the backend. Different backends
+represent the same thing differently, so pass `normalise_tangents=true` to smooth over
+the common cases:
 
-| Raw tangent | Normalised to |
-|---|---|
-| `nothing` — Zygote's cotangent for an unused argument | `zero(x)` |
-| `Mooncake.Tangent{NT}` — struct tangent from Mooncake pushforward | `NT` NamedTuple, then tries `T(values(NT)...)` |
-| Any other type | unchanged |
+| Situation | Raw | Normalised |
+|---|---|---|
+| Zygote, unused argument | `nothing` | `zero(x)` |
+| Mooncake pushforward, struct output | `Mooncake.Tangent` | reconstructed struct |
 
 ```julia
-# Zygote returns nothing for y since f doesn't use it
+# f ignores y so Zygote gives nothing for its cotangent
 f = (x, y) -> sum(x .^ 2)
 _, x̄s = value_and_pullback!!(f, 1.0, AutoZygote(), x, y; normalise_tangents=true)
-# x̄s[2] == zero(y)  instead of nothing
+# x̄s[2] is zero(y) instead of nothing
 
-# Mooncake pushforward: struct output comes back as a reconstructed struct
+# Mooncake pushforward returns Mooncake.Tangent for struct outputs
 struct MyPair{T}; a::T; b::T; end
 f = x -> MyPair(sum(x .^ 2), x[1] + x[2])
 _, ẏ = value_and_pushforward!!(f, ones(3), AutoMooncakeForward(config=nothing), x; normalise_tangents=true)
 # ẏ isa MyPair{Float64}
 ```
 
-If `T` has no matching positional constructor, the raw `NamedTuple` is returned with a `@warn`.
+If reconstruction fails (your struct has no positional constructor), you get the raw tangent back plus a warning with what you need to write for a conversion function:
+
+```
+Warning: normalise_tangents=true: cannot auto-reconstruct `MyConfig` from tangent.
+  Backend: AutoMooncakeForward
+  Raw tangent type: @NamedTuple{lr::Float64, momentum::Float64}
+  Raw tangent value: (lr = 0.1, momentum = 0.9)
+```
+
+Use `normalise_pushforward` (or `normalise_pullback` for pullback) to handle it using a custom function. When passed, it overrides `normalise_tangents` entirely. Your function receives the raw tangent and can return it in any form you want: reconstruct a struct, reshape an array, build a zero from the tangent shape, or anything else.
+
+```julia
+struct MyConfig; lr::Float64; momentum::Float64; end
+f = x -> MyConfig(x[1], x[2])
+_, ẏ = value_and_pushforward!!(f, ones(2), AutoMooncakeForward(config=nothing), x;
+    normalise_pushforward = t -> MyConfig(t.lr, t.momentum))
+# ẏ isa MyConfig
+```
 
 
 ## Backends
@@ -120,7 +138,7 @@ If `T` has no matching positional constructor, the raw `NamedTuple` is returned 
 | FiniteDifferences.jl | `AutoFiniteDifferences` | ✅ native | ✅ native |
 | FiniteDiff.jl | `AutoFiniteDiff` | ✅ native | ✅ native |
 
-⚠️ derived: VG.jl implements the missing direction via a fallback — pullback from a forward-mode backend runs one pushforward per input element; pushforward from a reverse-mode backend runs one pullback per output element. A `@warn` is emitted.
+⚠️ derived: VG.jl implements the missing direction via a fallback. Pullback from a forward-mode backend runs one pushforward per input element; pushforward from a reverse-mode backend runs one pullback per output element. A `@warn` is emitted.
 
 **Enzyme:** `AutoEnzyme`'s `mode` field is ignored. `value_and_pullback!!` always uses `Enzyme.Reverse` internally; `value_and_pushforward!!` always uses `Enzyme.Forward`.
 
@@ -154,8 +172,8 @@ y, x̄ = value_and_pullback!!(x -> sum(x .^ 2), 1.0, backend, x)
 |---|---|
 | `Symmetric` | `Matrix{T}` ✅ |
 | `SymTridiagonal` | `Matrix{T}` ✅ |
-| `Diagonal` | `@test_broken` — upstream Mooncake gap |
-| `Hermitian` | `@test_broken` — upstream Mooncake gap |
+| `Diagonal` | `@test_broken` (upstream Mooncake gap) |
+| `Hermitian` | `@test_broken` (upstream Mooncake gap) |
 
 ## Testing utilities
 
@@ -197,24 +215,34 @@ julia --project=examples/ examples/linear_solve.jl
 
 ## Adding a new backend
 
-Implement whichever of the two operations your backend supports natively — VG.jl will derive the other automatically. Register the extension in `Project.toml` and call `_normalise` at each return site if you want `normalise_tangents` support:
+Implement whichever of the two operations your backend supports natively and VG.jl will derive the other automatically. Pass all normalisation kwargs through to `_apply_norm` at each return site:
 
 ```julia
 # ext/ValueAndGradientMyBackendExt.jl
 module ValueAndGradientMyBackendExt
 
-using ValueAndGradient: ValueAndGradient, DiffInput, DiffLeaf
+using ValueAndGradient: ValueAndGradient, DiffInput
 using ADTypes: AutoMyBackend
 
+# Pullback (reverse-mode native)
 function ValueAndGradient.value_and_pullback!!(
         f::F, ȳ, backend::AutoMyBackend, x::DiffInput;
-        ad_cache=nothing, normalise_tangents=false, kwargs...) where {F}
+        ad_cache=nothing, normalise_tangents=false, normalise_pullback=nothing, kwargs...) where {F}
     y, x̄ = my_vjp(f, ȳ, x)
-    return y, normalise_tangents ? ValueAndGradient._normalise(x, x̄, backend) : x̄
+    return y, ValueAndGradient._apply_norm(x, x̄, backend, normalise_tangents, normalise_pullback)
+end
+
+# Pushforward (forward-mode native)
+function ValueAndGradient.value_and_pushforward!!(
+        f::F, ẋ, backend::AutoMyBackend, x::DiffInput;
+        ad_cache=nothing, normalise_tangents=false, normalise_pushforward=nothing, kwargs...) where {F}
+    y, ẏ = my_jvp(f, ẋ, x)
+    return y, ValueAndGradient._apply_norm(y, ẏ, backend, normalise_tangents, normalise_pushforward)
 end
 
 end
 ```
+
 
 ```toml
 # Project.toml

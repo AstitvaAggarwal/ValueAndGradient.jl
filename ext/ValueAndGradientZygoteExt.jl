@@ -11,6 +11,7 @@ function ValueAndGradient.value_and_pullback!!(
     xs...;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pullback = nothing,
     kwargs...,
 ) where {F}
     ad_cache !== nothing &&
@@ -19,9 +20,23 @@ function ValueAndGradient.value_and_pullback!!(
     x̄s = back(ȳ)
     if length(xs) == 1
         x̄ = only(x̄s)
-        return y, normalise_tangents ? ValueAndGradient._normalise(only(xs), x̄, backend) : x̄
+        return y,
+        ValueAndGradient._apply_norm(
+            only(xs),
+            x̄,
+            backend,
+            normalise_tangents,
+            normalise_pullback,
+        )
     else
-        return y, normalise_tangents ? ValueAndGradient._normalise(xs, x̄s, backend) : x̄s
+        return y,
+        ValueAndGradient._apply_norm(
+            xs,
+            x̄s,
+            backend,
+            normalise_tangents,
+            normalise_pullback,
+        )
     end
 end
 

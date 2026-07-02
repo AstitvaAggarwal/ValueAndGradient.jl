@@ -18,6 +18,7 @@ function ValueAndGradient.value_and_pullback!!(
     x::AbstractArray;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pullback = nothing,
     kwargs...,
 ) where {F}
     ad_cache !== nothing &&
@@ -26,7 +27,8 @@ function ValueAndGradient.value_and_pullback!!(
     ∂x = zero(x)
     h = Enzyme.Const(xi -> _vdot(ȳ, f(xi)))
     Enzyme.autodiff(Enzyme.Reverse, h, Enzyme.Active, Enzyme.Duplicated(copy(x), ∂x))
-    return y, normalise_tangents ? ValueAndGradient._normalise(x, ∂x, backend) : ∂x
+    return y,
+    ValueAndGradient._apply_norm(x, ∂x, backend, normalise_tangents, normalise_pullback)
 end
 
 function ValueAndGradient.value_and_pullback!!(
@@ -38,6 +40,7 @@ function ValueAndGradient.value_and_pullback!!(
     xrest::AbstractArray...;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pullback = nothing,
     kwargs...,
 ) where {F}
     ad_cache !== nothing &&
@@ -48,7 +51,8 @@ function ValueAndGradient.value_and_pullback!!(
     h = Enzyme.Const((args...) -> _vdot(ȳ, f(args...)))
     dups = map((xi, ∂xi) -> Enzyme.Duplicated(copy(xi), ∂xi), xs, ∂xs)
     Enzyme.autodiff(Enzyme.Reverse, h, Enzyme.Active, dups...)
-    return y, normalise_tangents ? ValueAndGradient._normalise(xs, ∂xs, backend) : ∂xs
+    return y,
+    ValueAndGradient._apply_norm(xs, ∂xs, backend, normalise_tangents, normalise_pullback)
 end
 
 # Forward mode: autodiff returns a 1-element result in Enzyme v0.13.
@@ -60,6 +64,7 @@ function ValueAndGradient.value_and_pushforward!!(
     x::AbstractArray;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pushforward = nothing,
     kwargs...,
 ) where {F}
     ad_cache !== nothing &&
@@ -72,7 +77,8 @@ function ValueAndGradient.value_and_pushforward!!(
         Enzyme.Duplicated(copy(x), copy(ẋ)),
     )
     ẏ = result[1]
-    return y, normalise_tangents ? ValueAndGradient._normalise(y, ẏ, backend) : ẏ
+    return y,
+    ValueAndGradient._apply_norm(y, ẏ, backend, normalise_tangents, normalise_pushforward)
 end
 
 function ValueAndGradient.value_and_pushforward!!(
@@ -84,6 +90,7 @@ function ValueAndGradient.value_and_pushforward!!(
     xrest::AbstractArray...;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pushforward = nothing,
     kwargs...,
 ) where {F}
     ad_cache !== nothing &&
@@ -93,7 +100,8 @@ function ValueAndGradient.value_and_pushforward!!(
     dups = map((xi, dxi) -> Enzyme.Duplicated(copy(xi), copy(dxi)), xs, ẋ)
     result = Enzyme.autodiff(Enzyme.Forward, f, Enzyme.Duplicated, dups...)
     ẏ = result[1]
-    return y, normalise_tangents ? ValueAndGradient._normalise(y, ẏ, backend) : ẏ
+    return y,
+    ValueAndGradient._apply_norm(y, ẏ, backend, normalise_tangents, normalise_pushforward)
 end
 
 end

@@ -16,6 +16,7 @@ function ValueAndGradient.value_and_pullback!!(
     x::AbstractArray;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pullback = nothing,
     kwargs...,
 ) where {F}
     y = f(x)
@@ -23,10 +24,18 @@ function ValueAndGradient.value_and_pullback!!(
     if ad_cache !== nothing
         ∂x = similar(x)
         FiniteDiff.finite_difference_gradient!(∂x, h, x, ad_cache)
-        return y, normalise_tangents ? ValueAndGradient._normalise(x, ∂x, backend) : ∂x
+        return y,
+        ValueAndGradient._apply_norm(
+            x,
+            ∂x,
+            backend,
+            normalise_tangents,
+            normalise_pullback,
+        )
     else
         x̄ = FiniteDiff.finite_difference_gradient(h, x)
-        return y, normalise_tangents ? ValueAndGradient._normalise(x, x̄, backend) : x̄
+        return y,
+        ValueAndGradient._apply_norm(x, x̄, backend, normalise_tangents, normalise_pullback)
     end
 end
 
@@ -39,6 +48,7 @@ function ValueAndGradient.value_and_pullback!!(
     xrest::AbstractArray...;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pullback = nothing,
     kwargs...,
 ) where {F}
     ad_cache !== nothing &&
@@ -52,7 +62,8 @@ function ValueAndGradient.value_and_pullback!!(
             xs[k],
         )
     end
-    return y, normalise_tangents ? ValueAndGradient._normalise(xs, x̄s, backend) : x̄s
+    return y,
+    ValueAndGradient._apply_norm(xs, x̄s, backend, normalise_tangents, normalise_pullback)
 end
 
 function ValueAndGradient.value_and_pushforward!!(
@@ -62,13 +73,15 @@ function ValueAndGradient.value_and_pushforward!!(
     x::AbstractArray;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pushforward = nothing,
     kwargs...,
 ) where {F}
     ad_cache !== nothing &&
         @warn "AutoFiniteDiff does not support ad_cache for pushforward; it will be ignored."
     y = f(x)
     ẏ = FiniteDiff.finite_difference_jvp(f, x, ẋ)
-    return y, normalise_tangents ? ValueAndGradient._normalise(y, ẏ, backend) : ẏ
+    return y,
+    ValueAndGradient._apply_norm(y, ẏ, backend, normalise_tangents, normalise_pushforward)
 end
 
 function ValueAndGradient.value_and_pushforward!!(
@@ -80,6 +93,7 @@ function ValueAndGradient.value_and_pushforward!!(
     xrest::AbstractArray...;
     ad_cache = nothing,
     normalise_tangents = false,
+    normalise_pushforward = nothing,
     kwargs...,
 ) where {F}
     ad_cache !== nothing &&
@@ -91,7 +105,8 @@ function ValueAndGradient.value_and_pushforward!!(
     g_plus = f(ntuple(i -> xs[i] .+ ε .* ẋ[i], Val(N))...)
     g_minus = f(ntuple(i -> xs[i] .- ε .* ẋ[i], Val(N))...)
     ẏ = (g_plus .- g_minus) ./ (2 * ε)
-    return y, normalise_tangents ? ValueAndGradient._normalise(y, ẏ, backend) : ẏ
+    return y,
+    ValueAndGradient._apply_norm(y, ẏ, backend, normalise_tangents, normalise_pushforward)
 end
 
 end

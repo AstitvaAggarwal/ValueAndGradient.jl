@@ -20,38 +20,54 @@ a single `DiffLeaf` (scalar or array), or a `Tuple` of `DiffLeaf`s for multi-inp
 const DiffInput = Union{DiffLeaf,Tuple{Vararg{DiffLeaf}}}
 
 """
-    value_and_pullback!!(f, ȳ, backend, x...; ad_cache=nothing, normalise_tangents=false) -> (y, x̄)
+    value_and_pullback!!(f, ȳ, backend, x...; ad_cache=nothing, normalise_tangents=false, normalise_pullback=nothing) -> (y, x̄)
 
-Returns `y = f(x...)` and the VJP `x̄ = (∂f/∂x)ᵀ ȳ`.
-`ȳ` must match the output type of `f`: scalar, array, or tuple thereof.
-Single argument: `x̄` has the same structure as `x`.
-Multiple arguments: `x̄` is a tuple of per-argument cotangents.
+Returns `y = f(x...)` and the VJP `x̄ = (∂f/∂x)ᵀ ȳ`. For multiple inputs, `x̄` is a
+tuple of per-argument cotangents. `ȳ` must match the output type of `f`.
 
-Pass a backend-specific `ad_cache` to reuse it across repeated calls.
-If `nothing`, the backend builds one internally (convenience path — not efficient for loops).
+```julia
+f = x -> sum(x .^ 2)
+y, x̄ = value_and_pullback!!(f, 1.0, AutoZygote(), [1.0, 2.0, 3.0])
+# x̄ ≈ [2.0, 4.0, 6.0]
+```
 
-When `normalise_tangents=true`, known backend-specific wrapper types are stripped before
-returning. `nothing` (Zygote's cotangent for unused arguments) becomes `zero(x)`.
-`Mooncake.Tangent` (struct output from Mooncake pushforward) is unwrapped to its fields
-NamedTuple, then reconstructed as `T(values(nt)...)` if `T` has a matching positional
-constructor — otherwise the NamedTuple is returned with a warning. Everything else passes
-through unchanged. Default `false` returns whatever the backend produces.
+`ad_cache` lets you reuse a backend-specific cache across repeated calls; omit it to
+build one on the fly each time.
 
-For `DiffLeaf` inputs with scalar/array outputs all backends agree after normalisation.
-Two known gaps: other forward-mode backends (e.g. Enzyme) don't normalise struct tangents,
-and the derived pullback for forward-mode backends gives real tangents for complex inputs.
+By default you get the raw cotangent from the backend. Pass `normalise_tangents=true`
+to convert known wrapper types: Zygote returns `nothing` for unused arguments, and this
+replaces it with `zero(x)`. Everything else comes back as-is.
+
+If you need something `normalise_tangents` does not handle, pass
+`normalise_pullback = cotangent -> ...`. Your function receives the raw cotangent and
+returns whatever form you want. It overrides `normalise_tangents` when both are set.
 """
 function value_and_pullback!! end
 
 """
-    value_and_pushforward!!(f, ẋ, backend, x...; ad_cache=nothing, normalise_tangents=false) -> (y, ẏ)
+    value_and_pushforward!!(f, ẋ, backend, x...; ad_cache=nothing, normalise_tangents=false, normalise_pushforward=nothing) -> (y, ẏ)
 
-Returns `y = f(x...)` and the JVP `ẏ = ∂f/∂x * ẋ`.
-`ẏ` matches the output type of `f`: scalar, array, or tuple thereof.
-Single argument: `ẋ` has the same structure as `x`.
-Multiple arguments: `ẋ` is a tuple of per-argument tangents.
+Returns `y = f(x...)` and the JVP `ẏ = ∂f/∂x * ẋ`. For multiple inputs, `ẋ` is a
+tuple of per-argument tangents.
 
-See `value_and_pullback!!` for `ad_cache` and `normalise_tangents` semantics.
+```julia
+f = x -> sum(x .^ 2)
+y, ẏ = value_and_pushforward!!(f, [1.0, 0.0, 0.0], AutoForwardDiff(), [1.0, 2.0, 3.0])
+# ẏ ≈ 2.0   (directional derivative along [1,0,0])
+```
+
+`ad_cache` behaves as in [`value_and_pullback!!`](@ref).
+
+By default you get the raw tangent from the backend. Pass `normalise_tangents=true` to
+convert known wrapper types: for Mooncake pushforward with a struct output, it tries to
+reconstruct the struct via its positional constructor. If that fails, it returns the raw
+tangent as-is and prints a warning with the backend, raw tangent type, and field values
+so you know exactly what you are working with.
+
+If `normalise_tangents` is not enough, pass `normalise_pushforward = tangent -> ...`.
+Your function receives the raw tangent and returns whatever form you want. The warning
+above gives you the field names you need to write it. It overrides `normalise_tangents`
+when both are set.
 """
 function value_and_pushforward!! end
 
@@ -86,8 +102,7 @@ _zero_like(x::Tuple) = map(_zero_like, x)
 
 _normalise(x, ::Nothing, backend) = _zero_like(x)
 _normalise(x::DiffLeaf, t::DiffLeaf, backend) = t
-_normalise(xs::Tuple, ts::Tuple, backend) =
-    map((x, t) -> _normalise(x, t, backend), xs, ts)
+_normalise(xs::Tuple, ts::Tuple, backend) = map((x, t) -> _normalise(x, t, backend), xs, ts)
 # TODO: ChainRulesCore.NoTangent and ZeroTangent are not mapped to zero(x) here.
 # For all 9 current backends this is a non-issue:
 #   - Zygote converts AbstractZero → nothing via wrap_chainrules_output before returning,
@@ -106,10 +121,20 @@ function _normalise(x::T, t, backend) where {T}
     try
         return T(values(t)...)
     catch
-        @warn "normalise_tangents=true: cannot reconstruct $(T) from tangent NamedTuple; " *
-              "returning tangent as-is. Define a positional constructor for $(T) to enable reconstruction."
+        backend_str = backend === nothing ? "unknown backend" : string(typeof(backend))
+        @warn """normalise_tangents=true: cannot auto-reconstruct `$T` from tangent.
+  Backend          : $backend_str
+  Raw tangent type : $(typeof(t))
+  Raw tangent value: $t
+  To handle this, pass: normalise_pullback = cotangent -> ... (or normalise_pushforward = tangent -> ...)"""
         return t
     end
+end
+
+function _apply_norm(x, t, backend, normalise_tangents, normalise_custom)
+    normalise_custom !== nothing && return normalise_custom(t)
+    normalise_tangents && return _normalise(x, t, backend)
+    return t
 end
 
 # Derive ẏ = Jẋ by running pullback calls (one per output leaf element).
