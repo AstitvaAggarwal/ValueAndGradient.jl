@@ -156,25 +156,6 @@ Input support varies:
 | `AutoFiniteDifferences` | ✅ | ✅ | ✅ | ✅ |
 | `AutoFiniteDiff` | — | ✅ | — | ✅ |
 
-## Structured array inputs
-
-`AutoMooncake` supports structured arrays via `friendly_tangents=true`, which converts Mooncake's internal tangent type back to a plain `Matrix`:
-
-```julia
-using LinearAlgebra
-x = Symmetric([1.0 2.0; 2.0 3.0])
-backend = AutoMooncake(config=Mooncake.Config(friendly_tangents=true))
-y, x̄ = value_and_pullback!!(x -> sum(x .^ 2), 1.0, backend, x)
-# x̄ isa Matrix{Float64}
-```
-
-| Type | `friendly_tangents=true` |
-|---|---|
-| `Symmetric` | `Matrix{T}` ✅ |
-| `SymTridiagonal` | `Matrix{T}` ✅ |
-| `Diagonal` | `@test_broken` (upstream Mooncake gap) |
-| `Hermitian` | `@test_broken` (upstream Mooncake gap) |
-
 ## Testing utilities
 
 Load `FiniteDifferences` and `Test` to get `test_pullback` and `test_pushforward`, which check AD results against finite differences:
